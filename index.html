@@ -165,6 +165,9 @@ button:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
 .ctrl:has(#mBordee:not([hidden])) .mode{font-size:1.05rem;gap:6px}
 .mode{position:relative;overflow:hidden}
 .c.aim{outline:2px solid #e8712d;outline-offset:-2px}
+.bdg{display:grid;grid-template-columns:repeat(5,26px);gap:3px;justify-content:center;margin:10px auto 6px}
+.bdg i{width:26px;height:26px;border-radius:5px;background:var(--parch3);border:1px solid rgba(60,40,10,.25)}
+.bdg i.x{background:#e8712d;border-color:#c25a1c}.bdg i.t{background:#fff6c0;border-color:#e8712d;box-shadow:0 0 0 2px #e8712d inset}
 @keyframes readyp{50%{transform:scale(1.04);box-shadow:0 0 0 5px rgba(201,154,61,.6),0 0 28px rgba(232,113,45,.8)}}
 .furie{position:absolute;left:8px;right:8px;bottom:4px;height:4px;border-radius:2px;background:rgba(0,0,0,.15);overflow:hidden}
 .furie i{display:block;height:100%;background:var(--brass);transform-origin:left;transition:transform .25s}
@@ -463,7 +466,7 @@ function volley(){over=true;const bd=$("board").getBoundingClientRect();$("vol")
       const cl=document.elementFromPoint(x,y);if(cl&&cl.classList&&cl.classList.contains("c"))cl.animate([{transform:"scale(1.15)"},{transform:"none"}],{duration:300})}},i*170);
   setTimeout(()=>{ammo--;furie=0;drawFurie();pop(innerWidth/2,bd.top+bd.height/2,"− 1 boulet","#c6472f",26);say("La flotte riposte ! Un boulet explose dans la soute.","bad");hud();over=false;checkAmmo()},800)}
 function drawFurie(){const b=$("furieBar");if(b)b.style.transform=`scaleX(${Math.min(1,furie/FMAX)})`;const ready=furie>=FMAX;$("mBordee").hidden=!ready;if(!ready&&mode==="bordee")setMode("fire")}
-function addFurie(n){const was=furie>=FMAX;furie=Math.min(FMAX,furie+n);drawFurie();if(!was&&furie>=FMAX){sfx.fanfare();say("Bordée prête ! Un bouton doré vient d'apparaître.","good");const b=$("mFire").getBoundingClientRect();burst(b.left+b.width/2,b.top,["#c99a3d","#fff6c0","#e8712d"],18,4)}}
+function addFurie(n){const was=furie>=FMAX;furie=Math.min(FMAX,furie+n);drawFurie();if(!was&&furie>=FMAX){sfx.fanfare();say("Bordée prête ! Un bouton doré vient d'apparaître.","good");if(!P.seen.bordee)later(introBordee,700);const b=$("mFire").getBoundingClientRect();burst(b.left+b.width/2,b.top,["#c99a3d","#fff6c0","#e8712d"],18,4)}}
 function bordee(r,c){furie=0;drawFurie();over=true;ammo--;hud();sfx.sink();shake();const g=$("grid"),a=cells[r*N+c];
   const h=document.createElement("div"),v=document.createElement("div");h.className="cross";v.className="cross";h.style.cssText=`left:0;right:0;top:${a.offsetTop}px;height:${a.offsetHeight}px`;v.style.cssText=`top:0;bottom:0;left:${a.offsetLeft}px;width:${a.offsetWidth}px;background:linear-gradient(180deg,transparent,#fff6c0,transparent)`;
   $("board").appendChild(h);$("board").appendChild(v);[h,v].forEach(e=>e.animate([{opacity:0,transform:"scale(1.2)"},{opacity:1,offset:.2},{opacity:0}],{duration:650}).onfinish=()=>e.remove());
@@ -664,6 +667,8 @@ function tutorial(){sheet(`<div class="kick">Ordre du capitaine</div><h2>Trouve 
   <p class="sm">Tu as juste assez de boulets pour la flotte, plus une petite marge : chaque tir dans l'eau en gaspille un. La flotte riposte quand la mèche est consumée ; chaque navire coulé la rallonge. Enchaîne les bons coups pour charger la <b>Bordée</b>.</p>`,[["Larguer les amarres",()=>{P.seen.tuto=1;save();closeSheet()}]])}
 const INTRO={cap:["Capitaine en vue","Le plus grand navire de cette mer est le sien. Coule-le, puis bats-le au duel pour lui prendre son fragment de carte."],kraken:["Le Kraken","Un monstre de 2 × 2 cases veille sur l'île. Il se coule comme un navire."]};
 function intro(k){sfx.flag();sheet(`<div class="kick">Attention</div><h2>${INTRO[k][0]}</h2><p>${INTRO[k][1]}</p>`,[["Compris",()=>{P.seen[k]=1;save();closeSheet()}]])}
+function introBordee(){sfx.fanfare();const g=Array.from({length:25},(_,i)=>{const r=i/5|0,c=i%5;return `<i class="${r===2&&c===2?"t":r===2||c===2?"x":""}"></i>`}).join("");
+  sheet(`<div class="kick">Nouveau coup</div><h2>La Bordée</h2><div class="bdg">${g}</div><p>Trois bons coups d'affilée l'ont chargée. Choisis le bouton doré <b>Bordée</b>, puis touche une case : <b>toute sa ligne et toute sa colonne</b> sont canonnées d'un seul boulet. L'eau se dévoile sans rien perdre, chaque coque traversée est touchée.</p><p class="sm">Une erreur ou une riposte vide la charge. Garde-la pour une ligne où tu soupçonnes plusieurs navires.</p>`,[["Compris",()=>{P.seen.bordee=1;save();closeSheet()}]])}
 function story(){sfx.show(3);sheet(`<div class="kick">Chapitre ${P.ch}</div><div class="big" style="color:var(--red)">${IC.frag}</div><h2>La carte déchirée</h2><p>La carte du trésor a été déchirée en trois. Trois capitaines en gardent chacun un morceau : <b>${P.caps.map(c=>c[0]).join(", ")}</b>.</p><p class="sm">Mer après mer, coule leurs navires et prends les fragments. L'Île du Crâne se dévoilera.</p>`,[["Prendre la mer",()=>{P.seen.story=1;if(P.lvl<1)P.lvl=1;save();closeSheet();startHunt()}]])}
 /* boot */
 function setIcons(){$("mapBtn").innerHTML=IC.sound;$("mapBtn").classList.toggle("off",muted);$("mSonar").innerHTML=IC.sonar+"Sonder";$("mFire").innerHTML=IC.fire+'<span id="fireLbl">Feu !</span><span class="furie"><i id="furieBar"></i></span>';$("mBordee").innerHTML='<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M3 12h18M12 3v18"/><circle cx="12" cy="12" r="3.5"/></svg>Bordée'}
