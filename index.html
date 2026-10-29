@@ -155,8 +155,13 @@ button:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
 .mode:active{transform:scale(.96)}
 .mode[aria-pressed="true"]{background:var(--ink2);color:var(--parch2)}
 #mFire[aria-pressed="true"]{background:var(--red);border-color:var(--red)}
-#mFire.ready{border-color:var(--brass);box-shadow:0 0 0 3px rgba(201,154,61,.45),0 0 18px rgba(232,113,45,.6);animation:readyp .9s ease-in-out infinite}
-#mFire.ready[aria-pressed="true"]{background:#e8712d}
+#mBordee{border-color:var(--brass);background:#f7e6b8;box-shadow:0 0 0 3px rgba(201,154,61,.45),0 0 18px rgba(232,113,45,.6);animation:readyp .9s ease-in-out infinite}
+#mBordee[aria-pressed="true"]{background:#e8712d;color:#fff6c0;border-color:#e8712d}
+#mBordee[hidden]{display:none}
+.ctrl:has(#mBordee:not([hidden])){grid-template-columns:1fr 1fr 1.15fr}
+.ctrl:has(#mBordee:not([hidden])) .mode{font-size:1.05rem;gap:6px}
+.mode{position:relative;overflow:hidden}
+.c.aim{outline:2px solid #e8712d;outline-offset:-2px}
 @keyframes readyp{50%{transform:scale(1.04);box-shadow:0 0 0 5px rgba(201,154,61,.6),0 0 28px rgba(232,113,45,.8)}}
 .furie{position:absolute;left:8px;right:8px;bottom:4px;height:4px;border-radius:2px;background:rgba(0,0,0,.15);overflow:hidden}
 .furie i{display:block;height:100%;background:var(--brass);transform-origin:left;transition:transform .25s}
@@ -276,7 +281,7 @@ button:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
     <div class="fuse" id="fuse"><span class="lbl" id="fuseLbl">Riposte</span><div class="meche"><div class="burnt" id="burnt"></div><i class="spark" id="spark"></i></div></div>
     <div class="stage"><div class="board" id="board"><div class="waves" id="waves"></div><canvas class="rip" id="rip"></canvas><div class="grid" id="grid"></div><div class="fl" id="fl"></div><div class="banner"><span id="banner"></span></div></div></div>
     <div class="msg" id="msg"></div>
-    <div class="ctrl"><button class="mode" id="mSonar" aria-pressed="true"></button><button class="mode" id="mFire" aria-pressed="false"></button></div>
+    <div class="ctrl"><button class="mode" id="mSonar" aria-pressed="true"></button><button class="mode" id="mFire" aria-pressed="false"></button><button class="mode" id="mBordee" aria-pressed="false" hidden></button></div>
   <div class="vol" id="vol"></div>
   </section>
   <div class="sheet" id="sheet" hidden><div class="card" id="card"></div></div>
@@ -454,8 +459,8 @@ function volley(){over=true;const bd=$("board").getBoundingClientRect();$("vol")
     ball.animate([{transform:`translate(${x+120}px,-40px) scale(1.4)`},{transform:`translate(${x-7}px,${y-7}px) scale(.9)`}],{duration:380,easing:"cubic-bezier(.4,0,.9,.6)",fill:"forwards"}).onfinish=()=>{ball.remove();shake();burst(x,y,["#f4e8c8","#b6d6d1","#2b1d12"],14,4);ring(x,y,60,"#f4e8c8",500,3);
       const cl=document.elementFromPoint(x,y);if(cl&&cl.classList&&cl.classList.contains("c"))cl.animate([{transform:"scale(1.15)"},{transform:"none"}],{duration:300})}},i*170);
   setTimeout(()=>{lives--;furie=0;drawFurie();pop(innerWidth/2,bd.top+bd.height/2,"− 1 matelot","#c6472f",26);say("La flotte riposte ! Un matelot à la mer.","bad");hud();over=false;if(lives<=0)wreck()},800)}
-function drawFurie(){const b=$("furieBar");if(b)b.style.transform=`scaleX(${Math.min(1,furie/FMAX)})`;const ready=furie>=FMAX;$("mFire").classList.toggle("ready",ready);const l=$("fireLbl");if(l)l.textContent=ready?"BORDÉE !":"Feu !"}
-function addFurie(n){const was=furie>=FMAX;furie=Math.min(FMAX,furie+n);drawFurie();if(!was&&furie>=FMAX){sfx.fanfare();say("Bordée prête ! Tire : toute la ligne et la colonne.","good");const b=$("mFire").getBoundingClientRect();burst(b.left+b.width/2,b.top,["#c99a3d","#fff6c0","#e8712d"],18,4)}}
+function drawFurie(){const b=$("furieBar");if(b)b.style.transform=`scaleX(${Math.min(1,furie/FMAX)})`;const ready=furie>=FMAX;$("mBordee").hidden=!ready;if(!ready&&mode==="bordee")setMode("fire")}
+function addFurie(n){const was=furie>=FMAX;furie=Math.min(FMAX,furie+n);drawFurie();if(!was&&furie>=FMAX){sfx.fanfare();say("Bordée prête ! Un bouton doré vient d'apparaître.","good");const b=$("mFire").getBoundingClientRect();burst(b.left+b.width/2,b.top,["#c99a3d","#fff6c0","#e8712d"],18,4)}}
 function bordee(r,c){furie=0;drawFurie();over=true;sfx.sink();shake();const g=$("grid"),a=cells[r*N+c];
   const h=document.createElement("div"),v=document.createElement("div");h.className="cross";v.className="cross";h.style.cssText=`left:0;right:0;top:${a.offsetTop}px;height:${a.offsetHeight}px`;v.style.cssText=`top:0;bottom:0;left:${a.offsetLeft}px;width:${a.offsetWidth}px;background:linear-gradient(180deg,transparent,#fff6c0,transparent)`;
   $("board").appendChild(h);$("board").appendChild(v);[h,v].forEach(e=>e.animate([{opacity:0,transform:"scale(1.2)"},{opacity:1,offset:.2},{opacity:0}],{duration:650}).onfinish=()=>e.remove());
@@ -531,7 +536,7 @@ function say(t,k){const m=$("msg");m.textContent=t;m.className="msg"+(k?" "+k:""
 function banner(t,cls){const e=$("banner");e.textContent=t;e.className="";void e.offsetWidth;e.className="go"+(cls?" "+cls:"")}
 function shake(){const b=$("board");b.classList.remove("shake");void b.offsetWidth;b.classList.add("shake")}
 function center(r,c){const b=cells[r*N+c].getBoundingClientRect();return[b.left+b.width/2,b.top+b.height/2,b.width]}
-function setMode(m){mode=m;$("mSonar").setAttribute("aria-pressed",m==="sonar");$("mFire").setAttribute("aria-pressed",m==="fire")}
+function setMode(m){mode=m;$("mSonar").setAttribute("aria-pressed",m==="sonar");$("mFire").setAttribute("aria-pressed",m==="fire");$("mBordee").setAttribute("aria-pressed",m==="bordee");if(m==="bordee")say("Bordée armée : vise, ligne + colonne balayées.","good")}
 function toggleFlag(r,c){if(busy())return;const s=state[r][c];if(s!==""&&s!=="f")return;state[r][c]=s==="f"?"":"f";sfx.flag();paint(r,c)}
 function rippleFrom(r,c,list,strength=1){const el0=cells[r*N+c],w=el0.offsetWidth,x=el0.offsetLeft+w/2,y=el0.offsetTop+w/2;addRipple(x,y,w,strength);
   const R=Math.max(3,...(list||[]).map(([yy,xx])=>Math.hypot(yy-r,xx-c)))+1.5,per=1000/RSPEED/strength;
@@ -541,10 +546,11 @@ function revealAnim(list,ms){list.forEach(([y,x,d],i)=>later(()=>{paint(y,x);cel
 function startAt(r,c){let g=0;while((board[r][c]!==-1||count(r,c)>0)&&g<400){[board,ships]=generate();g++}while(board[r][c]!==-1)[board,ships]=generate();started=true;hud();fuseStart()}
 function tap(r,c){if(busy())return;const s=state[r][c];if(s&&s!=="f"&&s!=="g"&&s!=="r")return;if(s==="f"){sfx.flag();say("Balise posée. Appui long pour la retirer.");return}
   if(s==="r"&&mode==="sonar"){sfx.click();say("Une coque est repérée ici. Passe en Feu ! pour tirer.");return}
+  if(mode==="bordee"){if(furie<FMAX){setMode("fire");return}if(!started){started=true;hud();fuseStart()}setMode("fire");bordee(r,c);return}
   if(mode==="sonar"){if(!started&&!state.flat().includes("g"))startAt(r,c);else if(!started){started=true;hud();fuseStart()}const v=board[r][c],[x,y,w]=center(r,c);
     if(v>=0){sfx.crash();burst(x,y,["#2b1d12","#f4e8c8","#c99a3d"],14,4.5);ring(x,y,w*1.6,"#2b1d12",450,3);state[r][c]="r";paint(r,c);mistake("Boum ! Une coque. Tire dessus avec Feu !",r,c);return}
     const n=count(r,c);sfx.ping(n);const list=revealWater(r,c);revealAnim(rippleFrom(r,c,list),1000/RSPEED);addFurie(1);say(n?n+" morceau"+(n>1?"x":"")+" de navire autour.":"Eau calme tout autour.","good")}
-  else{if(!started){started=true;hud();fuseStart()}if(furie>=FMAX){bordee(r,c);return}cannonShot(r,c)}}
+  else{if(!started){started=true;hud();fuseStart()}cannonShot(r,c)}}
 function cannonShot(r,c){const b=$("mFire").getBoundingClientRect(),[tx,ty]=center(r,c),x0=b.left+b.width/2,y0=b.top+6;
   const fl=document.createElement("div");fl.className="flash";fl.style.left=(x0-30)+"px";fl.style.top=(y0-30)+"px";document.body.appendChild(fl);fl.animate([{transform:"scale(.3)",opacity:1},{transform:"scale(1.3)",opacity:0}],{duration:200,easing:"ease-out"}).onfinish=()=>fl.remove();
   const sm=document.createElement("div");sm.className="smoke";sm.style.left=(x0-14)+"px";sm.style.top=(y0-14)+"px";document.body.appendChild(sm);sm.animate([{transform:"scale(.4)",opacity:.9},{transform:"scale(2.2) translateY(-20px)",opacity:0}],{duration:450,easing:"ease-out"}).onfinish=()=>sm.remove();
@@ -640,7 +646,7 @@ function wreck(){over=true;fuseStop();sfx.lose();let k=0;ships.forEach(s=>{(s.pi
 $("spyBtn").onclick=()=>{if(busy()||!P.spy)return;if(!started){say("Sonde d'abord une case.");return}const cand=[];for(let r=0;r<N;r++)for(let c=0;c<N;c++)if(board[r][c]===-1&&state[r][c]==="")cand.push([r,c,count(r,c)]);if(!cand.length)return;
   P.spy--;save();cand.sort((a,b)=>b[2]-a[2]);const[r,c]=cand[Math.random()*Math.min(4,cand.length)|0];sfx.spy();revealAnim(rippleFrom(r,c,revealWater(r,c)),1000/RSPEED);say("La longue-vue repère une eau sûre.","good");hud()};
 $("powBtn").onclick=()=>say(P.pow?"La poudre protège ton prochain tir manqué.":"Pas de poudre.");
-$("mSonar").onclick=()=>{setMode("sonar");sfx.click()};$("mFire").onclick=()=>{setMode("fire");sfx.swap()};
+$("mSonar").onclick=()=>{setMode("sonar");sfx.click()};$("mFire").onclick=()=>{setMode("fire");sfx.swap()};$("mBordee").onclick=()=>{setMode(mode==="bordee"?"fire":"bordee");sfx.fanfare()};
 $("mapBtn").onclick=()=>{muted=!muted;store.set("abordage-muted",muted?"1":"0");setIcons();sfx.click()};
 /* intros */
 const D=(cls,t="")=>`<span class="dw c ${cls}">${t}</span>`;
@@ -653,7 +659,7 @@ const INTRO={cap:["Capitaine en vue","Le plus grand navire de cette mer est le s
 function intro(k){sfx.flag();sheet(`<div class="kick">Attention</div><h2>${INTRO[k][0]}</h2><p>${INTRO[k][1]}</p>`,[["Compris",()=>{P.seen[k]=1;save();closeSheet()}]])}
 function story(){sfx.show(3);sheet(`<div class="kick">Chapitre ${P.ch}</div><div class="big" style="color:var(--red)">${IC.frag}</div><h2>La carte déchirée</h2><p>La carte du trésor a été déchirée en trois. Trois capitaines en gardent chacun un morceau : <b>${P.caps.map(c=>c[0]).join(", ")}</b>.</p><p class="sm">Mer après mer, coule leurs navires et prends les fragments. L'Île du Crâne se dévoilera.</p>`,[["Prendre la mer",()=>{P.seen.story=1;if(P.lvl<1)P.lvl=1;save();closeSheet();startHunt()}]])}
 /* boot */
-function setIcons(){$("mapBtn").innerHTML=IC.sound;$("mapBtn").classList.toggle("off",muted);$("mSonar").innerHTML=IC.sonar+"Sonder";$("mFire").innerHTML=IC.fire+'<span id="fireLbl">Feu !</span><span class="furie"><i id="furieBar"></i></span>'}
+function setIcons(){$("mapBtn").innerHTML=IC.sound;$("mapBtn").classList.toggle("off",muted);$("mSonar").innerHTML=IC.sonar+"Sonder";$("mFire").innerHTML=IC.fire+'<span id="fireLbl">Feu !</span><span class="furie"><i id="furieBar"></i></span>';$("mBordee").innerHTML='<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M3 12h18M12 3v18"/><circle cx="12" cy="12" r="3.5"/></svg>Bordée'}
 document.addEventListener("pointerdown",()=>{A()},{once:true});
 setIcons();if(!P.caps){P.caps=capsFor(P.ch);save()}$("sHunt").hidden=false;
 if(!P.seen.story)setTimeout(story,250);else startHunt();
