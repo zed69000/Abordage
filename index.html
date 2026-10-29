@@ -91,6 +91,9 @@ button:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
 .sh.x{fill:var(--ink);opacity:.35}
 .sh.cap{stroke:var(--red)}
 .lives{display:flex;gap:5px}
+.ammo{display:flex;align-items:center;gap:5px;color:var(--ink2);font:400 1.25rem var(--fd)}
+.ammo small{font:800 .62rem var(--f);color:var(--inkl);letter-spacing:.04em;text-transform:uppercase}
+.ammo.warn b{color:var(--fire)}.ammo.red{color:var(--red)}.ammo.red b,.ammo.red small{color:var(--red)}.ammo.red svg{animation:readyp .5s infinite}
 .life{width:18px;height:18px;fill:var(--red);transition:transform .25s}
 .life.x{fill:none;stroke:var(--inkl);stroke-width:1.6;transform:scale(.85)}
 .items{display:flex;gap:6px}
@@ -440,7 +443,7 @@ const DESC_UNUSED={mer:["Mer à nettoyer","Une flotte ennemie y croise. Coule-la
 const EV=[
   {t:"Un navire marchand",p:"Cale pleine, équipage mou. Son capitaine te défie en duel : Sabre, Pistolet, Perroquet.",c:[["L'aborder",()=>duel({name:"Le Marchand",style:null,loot:20+P.ch*10+(Math.random()*20|0)},w=>startHunt())],["Laisser filer",()=>startHunt()]]},
   {t:"Un naufragé sur un radeau",p:"Un vieux loup de mer. En remerciement, il te donne un baril de poudre.",c:[["Le hisser à bord",()=>{P.pow++;save();startHunt()}]]},
-  {t:"Le chant des sirènes",p:"Les écouter rapporte 40 pièces, mais l'équipage arrive sonné : une vie de moins dans cette mer.",c:[["Écouter",()=>{P.gold+=40;save();startHunt(-1)}],["Boucher les oreilles",()=>startHunt()]]},
+  {t:"Le chant des sirènes",p:"Les écouter rapporte 40 pièces, mais l'équipage arrive sonné : un boulet de marge en moins dans cette mer.",c:[["Écouter",()=>{P.gold+=40;save();startHunt(-1)}],["Boucher les oreilles",()=>startHunt()]]},
   {t:"Vent favorable",p:"Une brise chaude pousse ton navire. La vigie repère la flotte : un navire ennemi est visible dès le départ.",c:[["Hisser les voiles",()=>startHunt(0,1)]]}];
 function seaEvent(){const e=EV[Math.random()*EV.length|0];sfx.show(1);sheet(`<div class="kick">En mer</div><div class="big">${LM.mer}</div><h2>${e.t}</h2><p>${e.p}</p>`,e.c.map(([l,fn],k)=>[l,()=>{closeSheet();fn()},k?"alt":""]))}
 
@@ -458,10 +461,10 @@ function volley(){over=true;const bd=$("board").getBoundingClientRect();$("vol")
   for(let i=0;i<3;i++)setTimeout(()=>{const x=bd.left+bd.width*(.2+Math.random()*.6),y=bd.top+bd.height*(.2+Math.random()*.6),ball=document.createElement("div");ball.className="ball";document.body.appendChild(ball);sfx.cannon();
     ball.animate([{transform:`translate(${x+120}px,-40px) scale(1.4)`},{transform:`translate(${x-7}px,${y-7}px) scale(.9)`}],{duration:380,easing:"cubic-bezier(.4,0,.9,.6)",fill:"forwards"}).onfinish=()=>{ball.remove();shake();burst(x,y,["#f4e8c8","#b6d6d1","#2b1d12"],14,4);ring(x,y,60,"#f4e8c8",500,3);
       const cl=document.elementFromPoint(x,y);if(cl&&cl.classList&&cl.classList.contains("c"))cl.animate([{transform:"scale(1.15)"},{transform:"none"}],{duration:300})}},i*170);
-  setTimeout(()=>{lives--;furie=0;drawFurie();pop(innerWidth/2,bd.top+bd.height/2,"− 1 matelot","#c6472f",26);say("La flotte riposte ! Un matelot à la mer.","bad");hud();over=false;if(lives<=0)wreck()},800)}
+  setTimeout(()=>{ammo--;furie=0;drawFurie();pop(innerWidth/2,bd.top+bd.height/2,"− 1 boulet","#c6472f",26);say("La flotte riposte ! Un boulet explose dans la soute.","bad");hud();over=false;checkAmmo()},800)}
 function drawFurie(){const b=$("furieBar");if(b)b.style.transform=`scaleX(${Math.min(1,furie/FMAX)})`;const ready=furie>=FMAX;$("mBordee").hidden=!ready;if(!ready&&mode==="bordee")setMode("fire")}
 function addFurie(n){const was=furie>=FMAX;furie=Math.min(FMAX,furie+n);drawFurie();if(!was&&furie>=FMAX){sfx.fanfare();say("Bordée prête ! Un bouton doré vient d'apparaître.","good");const b=$("mFire").getBoundingClientRect();burst(b.left+b.width/2,b.top,["#c99a3d","#fff6c0","#e8712d"],18,4)}}
-function bordee(r,c){furie=0;drawFurie();over=true;sfx.sink();shake();const g=$("grid"),a=cells[r*N+c];
+function bordee(r,c){furie=0;drawFurie();over=true;ammo--;hud();sfx.sink();shake();const g=$("grid"),a=cells[r*N+c];
   const h=document.createElement("div"),v=document.createElement("div");h.className="cross";v.className="cross";h.style.cssText=`left:0;right:0;top:${a.offsetTop}px;height:${a.offsetHeight}px`;v.style.cssText=`top:0;bottom:0;left:${a.offsetLeft}px;width:${a.offsetWidth}px;background:linear-gradient(180deg,transparent,#fff6c0,transparent)`;
   $("board").appendChild(h);$("board").appendChild(v);[h,v].forEach(e=>e.animate([{opacity:0,transform:"scale(1.2)"},{opacity:1,offset:.2},{opacity:0}],{duration:650}).onfinish=()=>e.remove());
   const targets=[];for(let k=0;k<N;k++){targets.push([r,k]);if(k!==r)targets.push([k,c])}targets.sort((p,q)=>Math.abs(p[0]-r)+Math.abs(p[1]-c)-(Math.abs(q[0]-r)+Math.abs(q[1]-c)));
@@ -469,7 +472,7 @@ function bordee(r,c){furie=0;drawFurie();over=true;sfx.sink();shake();const g=$(
     if(board[y][x]===-1){burst(px,py,["#f4e8c8","#b6d6d1"],4,2.5);revealAnim(revealWater(y,x).map(([yy,xx])=>[yy,xx,0]),1)}
     else{burst(px,py,["#e8712d","#c99a3d","#2b1d12"],8,4);sfx.hit();const sh=strike(y,x);if(sh)sunkList.push(sh)}},i*55));
   later(()=>{over=false;const run=k=>{if(k>=sunkList.length){checkWin();return}sink(sunkList[k]);const w=setInterval(()=>{if(!over){clearInterval(w);run(k+1)}},120)};run(0);if(!sunkList.length)say("Bordée ! La ligne et la colonne sont balayées.","good")},targets.length*55+300)}
-let N=5,FLEET=[],cfg=null,lvl=0,curNd=null,board=null,ships=[],state=[],mode="sonar",lives=3,started=false,over=false,timers2=[];
+let N=5,FLEET=[],cfg=null,lvl=0,curNd=null,board=null,ships=[],state=[],mode="sonar",lives=3,ammo=0,started=false,over=false,timers2=[];
 const grid=$("grid");let cells=[],pressI=-1,lpT=null,lpDone=false;
 function capsFor(ch){return [0,1,2].map(k=>CAPN[(k+(ch-1)*3)%CAPN.length])}
 function levelType(){const open=P.frags.map((f,k)=>f?-1:k).filter(k=>k>=0);if(!open.length)return{t:"tresor"};if(P.lvl%3===0)return{t:"cap",cap:open[0]};return{t:"mer"}}
@@ -483,15 +486,15 @@ function exitBoard(cb){closeSheet();over=true;$("fl").animate([{opacity:1},{opac
   setTimeout(cb,mx+520)}
 function openPort(){const row=(ic,n,d,cost,ok)=>`<div class="si">${ic}<div class="t"><b>${n}</b><span>${d}</span></div><button data-b="${n}"${ok?"":" disabled"}><i class="coin"></i>${cost}</button></div>`;
   const draw=()=>{sheet(`<div class="kick">Port franc</div><h2>${PORTN[P.lvl/5%PORTN.length|0]}</h2><p class="sm">Tu as <b>${P.gold}</b> pièces · équipage ${P.crew}/5</p><div class="shop">
-    ${row(IC.crew,"Matelot","Un membre d'équipage de plus : une vie de plus à chaque mer.",40,P.gold>=40&&P.crew<5)}
-    ${row(IC.pow,"Poudre","Ton prochain tir manqué ne coûte pas de vie.",15,P.gold>=15)}
+    ${row(IC.crew,"Matelot","Un canonnier de plus : un boulet de marge en plus à chaque mer.",40,P.gold>=40&&P.crew<5)}
+    ${row(IC.pow,"Poudre","Ton prochain tir manqué ne gaspille pas de boulet.",15,P.gold>=15)}
     ${row(IC.spy,"Longue-vue","Révèle une case d'eau sûre.",20,P.gold>=20)}</div>`,[["Reprendre la mer",()=>{closeSheet();startHunt()}]]);
     $("card").querySelectorAll(".si button").forEach(b=>b.onclick=()=>{const k=b.dataset.b;sfx.coin();if(k==="Matelot"){P.gold-=40;P.crew++}else if(k==="Poudre"){P.gold-=15;P.pow++}else{P.gold-=20;P.spy++}save();hudGold();draw()})};
   draw()}
 function startHunt(lifeMod=0,peek=0){timers.forEach(clearTimeout);timers=[];closeSheet();const nd=levelType();nd.name=nd.t==="tresor"?"Île du Crâne":nd.t==="cap"?P.caps[nd.cap][1]:SEAN[(P.lvl*7+P.ch)%SEAN.length];curNd=nd;cfg=fleetFor(nd);N=cfg.n;FLEET=cfg.f;
   $("fl").getAnimations().forEach(a=>a.cancel());$("huntTitle").getAnimations().forEach(a=>a.cancel());document.querySelectorAll(".ball,.flash,.smoke,.puff").forEach(e=>e.remove());
   build();[board,ships]=generate();state=Array.from({length:N},()=>Array(N).fill(""));
-  lives=Math.max(1,P.crew+lifeMod);started=false;over=false;setMode("sonar");$("sHunt").hidden=false;
+  lives=Math.max(1,P.crew+lifeMod);ammo=need()+Math.max(0,P.crew+lifeMod);started=false;over=false;setMode("sonar");$("sHunt").hidden=false;
   $("huntTitle").firstChild.textContent=nd.name;$("huntSub").textContent="Mer "+P.lvl+" · "+(nd.t==="cap"?"Capitaine "+P.caps[nd.cap][0]+" en vue":nd.t==="tresor"?"Le Kraken garde le trésor":"Fragments "+P.frags.filter(Boolean).length+"/3");
   fuseStop();fuseT=fuseDur();fuseLeft=fuseT;$("fuse").classList.remove("low");drawFuse();furie=0;drawFurie();
   $("waves").innerHTML=wavesHTML();paintAll();hud();
@@ -529,7 +532,9 @@ function paint(r,c){const el=cells[r*N+c],s=state[r][c];let k="c",t="";
   if(el.className!==k)el.className=k;if(el.textContent!==t)el.textContent=t}
 function paintAll(){for(let r=0;r<N;r++)for(let c=0;c<N;c++)paint(r,c)}
 function hudGold(){$("gold2").textContent=P.gold}
-function hud(){$("lives").innerHTML=Array.from({length:Math.max(P.crew,lives)},(_,i)=>`<svg class="life${i<lives?"":" x"}" viewBox="0 0 24 24"><path d="M12 20.5S3.5 15 3.5 9.2A4.4 4.4 0 0 1 12 7a4.4 4.4 0 0 1 8.5 2.2C20.5 15 12 20.5 12 20.5z"/></svg>`).join("");
+function need(){return ships.reduce((a,s)=>a+(s.cells.length-s.hits),0)}
+function spare(){return ammo-need()}
+function hud(){const sp=spare();$("lives").innerHTML=`<span class="ammo${sp<=0?" red":sp<=1?" warn":""}"><svg viewBox="0 0 24 24" width="20" height="20"><circle cx="12" cy="12" r="9" fill="currentColor"/><circle cx="9" cy="9" r="3" fill="#fff" opacity=".35"/></svg><b>${ammo}</b><small>${sp>0?"+"+sp:"0"} marge</small></span>`;
   $("fleet").innerHTML=ships.map(s=>s.kraken?`<svg class="sh${s.sunk?" x":""}" viewBox="0 0 24 18"><path d="M5 11a7 7 0 0 1 14 0zM6 11c-2 2-2 4 0 6M10 11v6M14 11v6M18 11c2 2 2 4 0 6"/></svg>`:`<svg class="sh${s.sunk?" x":""}${s.isCap?" cap":""}" viewBox="0 0 ${14+s.cells.length*8} 18"><path d="M1 10H${13+s.cells.length*8}L${9+s.cells.length*8} 16H5Z M${6+s.cells.length*2} 10V3H${10+s.cells.length*5}V10"/></svg>`).join("");
   $("spyBtn").innerHTML=IC.spy+P.spy;$("spyBtn").disabled=!P.spy;$("powBtn").innerHTML=IC.pow+P.pow;$("powBtn").disabled=!P.pow;hudGold()}
 function say(t,k){const m=$("msg");m.textContent=t;m.className="msg"+(k?" "+k:"")}
@@ -548,7 +553,7 @@ function tap(r,c){if(busy())return;const s=state[r][c];if(s&&s!=="f"&&s!=="g"&&s
   if(s==="r"&&mode==="sonar"){sfx.click();say("Une coque est repérée ici. Passe en Feu ! pour tirer.");return}
   if(mode==="bordee"){if(furie<FMAX){setMode("fire");return}if(!started){started=true;hud();fuseStart()}setMode("fire");bordee(r,c);return}
   if(mode==="sonar"){if(!started&&!state.flat().includes("g"))startAt(r,c);else if(!started){started=true;hud();fuseStart()}const v=board[r][c],[x,y,w]=center(r,c);
-    if(v>=0){sfx.crash();burst(x,y,["#2b1d12","#f4e8c8","#c99a3d"],14,4.5);ring(x,y,w*1.6,"#2b1d12",450,3);state[r][c]="r";paint(r,c);mistake("Boum ! Une coque. Tire dessus avec Feu !",r,c);return}
+    if(v>=0){sfx.crash();burst(x,y,["#2b1d12","#f4e8c8","#c99a3d"],14,4.5);ring(x,y,w*1.6,"#2b1d12",450,3);state[r][c]="r";paint(r,c);alarm("Boum ! Une coque : l'ennemi t'a entendu. Tire dessus avec Feu !",r,c);return}
     const n=count(r,c);sfx.ping(n);const list=revealWater(r,c);revealAnim(rippleFrom(r,c,list),1000/RSPEED);addFurie(1);say(n?n+" morceau"+(n>1?"x":"")+" de navire autour.":"Eau calme tout autour.","good")}
   else{if(!started){started=true;hud();fuseStart()}cannonShot(r,c)}}
 function cannonShot(r,c){const b=$("mFire").getBoundingClientRect(),[tx,ty]=center(r,c),x0=b.left+b.width/2,y0=b.top+6;
@@ -557,9 +562,9 @@ function cannonShot(r,c){const b=$("mFire").getBoundingClientRect(),[tx,ty]=cent
   const ball=document.createElement("div");ball.className="ball";document.body.appendChild(ball);sfx.cannon();shake();
   ball.animate([{transform:`translate(${x0-7}px,${y0-7}px) scale(.6)`},{transform:`translate(${(x0+tx)/2-7}px,${Math.min(y0,ty)-60}px) scale(1.2)`,offset:.5},{transform:`translate(${tx-7}px,${ty-7}px) scale(.9)`}],{duration:190,easing:"cubic-bezier(.4,0,.8,.6)",fill:"forwards"}).onfinish=()=>{ball.remove();impact(r,c)}}
 function impact(r,c){const v=board[r][c],[x,y,w]=center(r,c);
-  if(state[r][c]&&state[r][c]!=="f"&&state[r][c]!=="g"&&state[r][c]!=="r")return;
+  if(state[r][c]&&state[r][c]!=="f"&&state[r][c]!=="g"&&state[r][c]!=="r")return;ammo--;
   if(v===-1){sfx.splash();burst(x,y,["#f4e8c8","#b6d6d1"],12,3.5);revealAnim(rippleFrom(r,c,revealWater(r,c),.8),1000/RSPEED);
-    if(P.pow>0){P.pow--;save();hud();say("Plouf ! La poudre a sauvé ta vie.","good");return}mistake("Plouf ! Rien que de l'eau.",r,c);return}
+    if(P.pow>0){P.pow--;ammo++;save();hud();say("Plouf ! La poudre a sauvé ton boulet.","good");return}mistake("Plouf ! Un boulet perdu.",r,c);return}
   burst(x,y,["#6b4426","#e8712d","#c99a3d","#2b1d12"],18,5);ring(x,y,w*1.8,"#e8712d",450,4);shake();const sh=strike(r,c);
   addFurie(2);if(sh)sink(sh);else{sfx.hit();banner("Touché !");pop(x,y-10,"Touché !","#e8712d",22);say("Touché ! Suis la coque et achève-le.","good")}}
 function strike(r,c){state[r][c]="h";paint(r,c);const s=ships[board[r][c]];s.hits++;if(s.hits<s.cells.length)piece(r,c,s);return s.hits===s.cells.length?s:null}
@@ -571,7 +576,9 @@ function piece(r,c,s){const el=cells[r*N+c],w=document.createElement("div");w.cl
 function refreshPieces(s){(s.pieces||[]).forEach(w=>{if(!w.dataset.art){w.dataset.art="1";w.innerHTML=CHUNK;w.firstChild.style.cssText="left:0;top:0;width:100%;height:100%"}})}
 function shockwave(r0,c0,strength=1){cells.forEach((el,i)=>{const r=i/N|0,c=i%N,dx=c-c0,dy=r-r0,d=Math.hypot(dx,dy);if(d<.5||d>5.5)return;const k=strength/(1+d*.6),ux=dx/d,uy=dy/d;
     el.animate([{transform:"none",filter:"brightness(1)"},{transform:`translate(${(ux*16*k).toFixed(1)}%,${(uy*16*k).toFixed(1)}%) scale(${(1+.14*k).toFixed(3)})`,filter:`brightness(${(1+.5*k).toFixed(2)})`,offset:.3},{transform:"none",filter:"brightness(1)"}],{duration:520,delay:d*42,easing:"ease-out"})})}
-function mistake(t,r,c){lives--;furie=0;drawFurie();pop(...center(r,c).slice(0,2),"− 1 vie","#c6472f",22);shake();say(t,"bad");hud();if(lives<=0)wreck()}
+function mistake(t,r,c){furie=0;drawFurie();pop(...center(r,c).slice(0,2),"− 1 boulet","#c6472f",22);shake();say(t,"bad");hud();checkAmmo()}
+function checkAmmo(){if(ammo<need()){later(()=>wreck("Plus assez de boulets pour couler la flotte."),500)}else if(spare()===0)say("Dernier boulet de marge : plus aucune erreur possible.","bad")}
+function alarm(t,r,c){furie=0;drawFurie();shake();say(t,"bad");if(fuseTick){fuseLeft=Math.max(.5,fuseLeft-5);$("fuse").classList.toggle("low",fuseLeft<=3.5);drawFuse();pop(innerWidth/2,$("fuse").getBoundingClientRect().top+10,"− 5 s","#c6472f",18)}}
 function shipCenter(s){const a=center(...s.cells[0]),b=center(...s.cells[s.cells.length-1]);return[(a[0]+b[0])/2,(a[1]+b[1])/2,a[2]]}
 function sink(s){s.sunk=true;over=true;if(fuseTick)fusePush(4+s.cells.length*2);addFurie(2);(s.pieces||[]).forEach(w=>w.remove());s.pieces=[];const o=addShip(s),sv=o.el.querySelector("svg"),[cx0,cy0,w]=shipCenter(s),R=w*(s.cells.length*.5+.8);
   s.cells.forEach(([y,x])=>{state[y][x]="s"});sfx.implode();
@@ -636,12 +643,12 @@ function duel(foe,done){const st={me:0,foe:0,round:1,busy:true,last:null};let ti
   draw(null);const v0=$("card").querySelector(".verdict");if(v0)v0.textContent="En garde…";$("card").querySelectorAll(".pick").forEach(b=>b.disabled=true);
   setTimeout(()=>{if(ended)return;st.busy=false;draw(null);arm()},900)}
 /* fin de mer */
-function checkWin(){if(!ships.every(s=>s.sunk))return;over=true;fuseStop();const nd=curNd;sfx.fanfare();const tres=nd.t==="tresor";const bonus=lives*20;P.gold+=bonus;save();hudGold();
+function checkWin(){if(!ships.every(s=>s.sunk))return;over=true;fuseStop();const nd=curNd;sfx.fanfare();const tres=nd.t==="tresor";const bonus=Math.max(0,spare())*15;P.gold+=bonus;save();hudGold();
   later(()=>{if(tres){const g=200*P.ch;P.gold+=g;P.ch++;P.frags=[0,0,0];P.caps=capsFor(P.ch);P.lvl=0;P.seen.story=0;save();sheet(`<div class="kick">Chapitre ${P.ch-1} terminé</div><div class="big" style="color:var(--red)">${LM.tresor}</div><h2>Le trésor est à toi !</h2><p>+${g} pièces. Au fond du coffre, une nouvelle carte déchirée : trois autres capitaines.</p>`,[["Chapitre suivant",()=>{closeSheet();story()}]])}
     else{const left=P.frags.filter(f=>!f).length;sheet(`<div class="kick">${nd.name}</div><h2>Mer nettoyée</h2><p>Bonus d'équipage : +${bonus} pièces.</p><p class="sm">${left?"Il reste "+left+" fragment"+(left>1?"s":"")+" à prendre aux capitaines."+(P.lvl%3===2?" Le prochain t'attend.":""):"L'Île du Crâne est la prochaine escale."}</p>`,[["Mer suivante",()=>{closeSheet();nextLevel()}]])}},900)}
-function wreck(){over=true;fuseStop();sfx.lose();let k=0;ships.forEach(s=>{(s.pieces||[]).forEach(w=>w.remove());if(s.sunk)return;later(()=>{const o=addShip(s);o.el.style.opacity=".55"},200+(k++)*150)});
+function wreck(why){over=true;fuseStop();sfx.lose();let k=0;ships.forEach(s=>{(s.pieces||[]).forEach(w=>w.remove());if(s.sunk)return;later(()=>{const o=addShip(s);o.el.style.opacity=".55"},200+(k++)*150)});
   const loss=Math.round(P.gold*.2);P.gold-=loss;save();hudGold();
-  later(()=>sheet(`<div class="kick">Naufrage</div><div class="big">${IC.skull}</div><h2>Ton navire sombre</h2><p>L'équipage regagne la côte à la nage. ${loss?"Tu perds "+loss+" pièces dans l'eau.":""}</p>`,[["Réessayer cette mer",()=>exitBoard(()=>startHunt())]]),1300)}
+  later(()=>sheet(`<div class="kick">Naufrage</div><div class="big">${IC.skull}</div><h2>${why?"Soute vide":"Ton navire sombre"}</h2><p>${why||"L'équipage regagne la côte à la nage."} ${loss?"Tu perds "+loss+" pièces dans l'eau.":""}</p>`,[["Réessayer cette mer",()=>exitBoard(()=>startHunt())]]),1300)}
 /* objets */
 $("spyBtn").onclick=()=>{if(busy()||!P.spy)return;if(!started){say("Sonde d'abord une case.");return}const cand=[];for(let r=0;r<N;r++)for(let c=0;c<N;c++)if(board[r][c]===-1&&state[r][c]==="")cand.push([r,c,count(r,c)]);if(!cand.length)return;
   P.spy--;save();cand.sort((a,b)=>b[2]-a[2]);const[r,c]=cand[Math.random()*Math.min(4,cand.length)|0];sfx.spy();revealAnim(rippleFrom(r,c,revealWater(r,c)),1000/RSPEED);say("La longue-vue repère une eau sûre.","good");hud()};
@@ -654,7 +661,7 @@ function tutorial(){sheet(`<div class="kick">Ordre du capitaine</div><h2>Trouve 
   <div class="step">${D("")}<span>Touche une case pour la <b>sonder</b>. Un chiffre apparaît.</span></div>
   <div class="step">${D("w n2","2")}<span>Il compte les morceaux de navire dans les <b>8 cases autour</b>.</span></div>
   <div class="step">${D("h")}<span>Sûr de toi ? Passe en <b>Feu !</b> et tire au canon. Un navire coulé, c'est un abordage et du butin.</span></div></div>
-  <p class="sm">La flotte riposte quand la mèche est consumée : chaque navire coulé la rallonge. Enchaîne les bons coups pour charger la <b>Bordée</b>.</p>`,[["Larguer les amarres",()=>{P.seen.tuto=1;save();closeSheet()}]])}
+  <p class="sm">Tu as juste assez de boulets pour la flotte, plus une petite marge : chaque tir dans l'eau en gaspille un. La flotte riposte quand la mèche est consumée ; chaque navire coulé la rallonge. Enchaîne les bons coups pour charger la <b>Bordée</b>.</p>`,[["Larguer les amarres",()=>{P.seen.tuto=1;save();closeSheet()}]])}
 const INTRO={cap:["Capitaine en vue","Le plus grand navire de cette mer est le sien. Coule-le, puis bats-le au duel pour lui prendre son fragment de carte."],kraken:["Le Kraken","Un monstre de 2 × 2 cases veille sur l'île. Il se coule comme un navire."]};
 function intro(k){sfx.flag();sheet(`<div class="kick">Attention</div><h2>${INTRO[k][0]}</h2><p>${INTRO[k][1]}</p>`,[["Compris",()=>{P.seen[k]=1;save();closeSheet()}]])}
 function story(){sfx.show(3);sheet(`<div class="kick">Chapitre ${P.ch}</div><div class="big" style="color:var(--red)">${IC.frag}</div><h2>La carte déchirée</h2><p>La carte du trésor a été déchirée en trois. Trois capitaines en gardent chacun un morceau : <b>${P.caps.map(c=>c[0]).join(", ")}</b>.</p><p class="sm">Mer après mer, coule leurs navires et prends les fragments. L'Île du Crâne se dévoilera.</p>`,[["Prendre la mer",()=>{P.seen.story=1;if(P.lvl<1)P.lvl=1;save();closeSheet();startHunt()}]])}
