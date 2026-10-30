@@ -1,6 +1,7 @@
 # Abordage
 
-Démineur × bataille navale, thème pirate. Un seul fichier par version.
+Démineur × bataille navale, thème pirate.
 
-- **Version puzzle (logique, sans hasard)** : https://zed69000.github.io/Abordage/
-- **Version démineur (mèche, ripostes, compte juste)** : https://zed69000.github.io/Abordage/demineur/
+- Menu : https://zed69000.github.io/Abordage/
+- Mode Logique (puzzle sans hasard) : `puzzle/`
+- Mode Démineur (mèche, ripostes, Bordée) : `demineur/`
