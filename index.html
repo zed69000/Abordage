@@ -338,8 +338,8 @@ document.documentElement.style.setProperty("--hull",u('<svg xmlns="http://www.w3
 document.documentElement.style.setProperty("--flag",u('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path d="M30 90V12" stroke="#4b3220" stroke-width="7" stroke-linecap="round"/><path d="M34 14h44l-10 14 10 14H34z" fill="#c6472f"/></svg>'));
 
 /* ---------- état ---------- */
-const SAVE="abordage-v6";let P=null;try{P=JSON.parse(store.get(SAVE))}catch(e){}
-if(!P||!P.caps)P={gold:0,crew:3,spy:1,pow:0,ch:1,lvl:1,frags:[0,0,0],caps:null,seen:{}};
+const SAVE="abordage-v7";let P=null;try{P=JSON.parse(store.get(SAVE))}catch(e){}
+if(!P||!P.caps)P={gold:0,crew:0,spy:1,pow:1,ch:1,lvl:1,frags:[0,0,0],caps:null,seen:{}};
 let muted=store.get("abordage-muted")==="1";
 function save(){store.set(SAVE,JSON.stringify(P))}
 const CAPN=[["Barbe-Rousse","Le Vengeur","sabre"],["Jack la Mèche","La Sirène Ivre","pistol"],["La Veuve Noire","Le Corbeau","parrot"],["Le Borgne","L'Épervier","sabre"],["Silas Grisvent","La Fortune","pistol"],["Mama Coco","Le Perroquet Noir","parrot"]];
@@ -460,20 +460,21 @@ function fuseStart(){fuseT=fuseDur();fuseLeft=fuseT;clearInterval(fuseTick);let 
     if(fuseLeft<=3.5&&!$("fuse").classList.contains("low")){$("fuse").classList.add("low")}
     if(fuseLeft<=0){fuseLeft=fuseT;$("fuse").classList.remove("low");volley()}},100)}
 function fuseStop(){clearInterval(fuseTick);fuseTick=null}
+function ripLoss(){return 10+P.lvl*4+(P.ch-1)*20}
 function ripDur(){return Math.max(4,8-(P.lvl-1)*.3-(P.ch-1)*1.5)}
 function armRip(s){if(s.sunk)return;s.rip=ripDur();s.ripT=s.rip;drawRip(s)}
 function drawRip(s){(s.pieces||[]).forEach((w,i,a)=>{let r=w.querySelector(".rip");if(i<a.length-1){if(r)r.remove();return}if(!r){r=document.createElement("b");r.className="rip";w.appendChild(r)}r.style.setProperty("--k",(1-s.rip/s.ripT).toFixed(3));r.classList.toggle("hot",s.rip<=1.5)})}
 function ripTick(dt){ships.forEach(s=>{if(s.sunk||!s.rip)return;s.rip-=dt;if(s.rip<=0){s.rip=ripDur()+2;s.ripT=s.rip;shipFire(s)}drawRip(s)})}
-function shipFire(s){const w=(s.pieces||[]).slice(-1)[0];if(!w)return;const b=w.getBoundingClientRect(),x=b.left+b.width/2,y=b.top+b.height/2,h=$("lives").getBoundingClientRect(),tx=h.left+h.width/2,ty=h.top+h.height/2;
+function shipFire(s){const w=(s.pieces||[]).slice(-1)[0];if(!w)return;const b=w.getBoundingClientRect(),x=b.left+b.width/2,y=b.top+b.height/2,h=$("gold2").getBoundingClientRect(),tx=h.left+h.width/2,ty=h.top+h.height/2;
   sfx.cannon();burst(x,y,["#f4e8c8","#e8712d"],8,3);const ball=document.createElement("div");ball.className="ball";document.body.appendChild(ball);
-  ball.animate([{transform:`translate(${x-7}px,${y-7}px) scale(.7)`},{transform:`translate(${(x+tx)/2-7}px,${Math.min(y,ty)-70}px) scale(1.3)`,offset:.5},{transform:`translate(${tx-7}px,${ty-7}px) scale(.8)`}],{duration:520,easing:"cubic-bezier(.3,0,.8,.6)",fill:"forwards"}).onfinish=()=>{ball.remove();ammo--;shake();burst(tx,ty,["#2b1d12","#e8712d","#f4e8c8"],14,4);ring(tx,ty,40,"#c6472f",400,3);pop(tx,ty-16,"− 1 boulet","#c6472f",22);$("vol").animate([{opacity:0},{opacity:.7,offset:.2},{opacity:0}],{duration:600});say("Le navire blessé riposte ! Un boulet de moins.","bad");hud();checkAmmo()}}
+  ball.animate([{transform:`translate(${x-7}px,${y-7}px) scale(.7)`},{transform:`translate(${(x+tx)/2-7}px,${Math.min(y,ty)-70}px) scale(1.3)`,offset:.5},{transform:`translate(${tx-7}px,${ty-7}px) scale(.8)`}],{duration:520,easing:"cubic-bezier(.3,0,.8,.6)",fill:"forwards"}).onfinish=()=>{ball.remove();const loss=ripLoss();P.gold=Math.max(0,P.gold-loss);save();furie=0;drawFurie();shake();burst(tx,ty,["#2b1d12","#e8712d","#c99a3d"],14,4);ring(tx,ty,40,"#c6472f",400,3);pop(tx,ty-16,"− "+loss+" pièces","#c6472f",22);$("vol").animate([{opacity:0},{opacity:.7,offset:.2},{opacity:0}],{duration:600});say("Le navire blessé riposte ! Il défonce ta cale : − "+loss+" pièces.","bad");hudGold();hud()}}
 function drawFuse(){const k=Math.max(0,fuseLeft/fuseT);$("burnt").style.width=((1-k)*100)+"%";$("spark").style.left=(k*100)+"%";$("fuseLbl").textContent=fuseLeft<=3.5?"Riposte imminente !":"Riposte dans "+Math.ceil(fuseLeft)+" s"}
 function fusePush(sec){fuseLeft=Math.min(fuseT,fuseLeft+sec);$("fuse").classList.toggle("low",fuseLeft<=3.5);drawFuse();pop(innerWidth/2,$("fuse").getBoundingClientRect().top+10,"+"+sec+" s","#1f5e5a",18)}
 function volley(){over=true;const bd=$("board").getBoundingClientRect();$("vol").animate([{opacity:0},{opacity:1,offset:.2},{opacity:0}],{duration:900});sfx.thunder&&sfx.thunder();
   for(let i=0;i<3;i++)setTimeout(()=>{const x=bd.left+bd.width*(.2+Math.random()*.6),y=bd.top+bd.height*(.2+Math.random()*.6),ball=document.createElement("div");ball.className="ball";document.body.appendChild(ball);sfx.cannon();
     ball.animate([{transform:`translate(${x+120}px,-40px) scale(1.4)`},{transform:`translate(${x-7}px,${y-7}px) scale(.9)`}],{duration:380,easing:"cubic-bezier(.4,0,.9,.6)",fill:"forwards"}).onfinish=()=>{ball.remove();shake();burst(x,y,["#f4e8c8","#b6d6d1","#2b1d12"],14,4);ring(x,y,60,"#f4e8c8",500,3);
       const cl=document.elementFromPoint(x,y);if(cl&&cl.classList&&cl.classList.contains("c"))cl.animate([{transform:"scale(1.15)"},{transform:"none"}],{duration:300})}},i*170);
-  setTimeout(()=>{ammo--;furie=0;drawFurie();pop(innerWidth/2,bd.top+bd.height/2,"− 1 boulet","#c6472f",26);say("La flotte riposte ! Un boulet explose dans la soute.","bad");hud();over=false;checkAmmo()},800)}
+  setTimeout(()=>{const loss=ripLoss()*2;P.gold=Math.max(0,P.gold-loss);save();furie=0;drawFurie();pop(innerWidth/2,bd.top+bd.height/2,"− "+loss+" pièces","#c6472f",26);say("La flotte riposte ! Ta cale est éventrée : − "+loss+" pièces.","bad");hudGold();hud();over=false},800)}
 function drawFurie(){const b=$("furieBar");if(b)b.style.transform=`scaleX(${Math.min(1,furie/FMAX)})`;const ready=furie>=FMAX;$("mBordee").hidden=!ready;if(!ready&&mode==="bordee")setMode("fire")}
 function addFurie(n){const was=furie>=FMAX;furie=Math.min(FMAX,furie+n);drawFurie();if(!was&&furie>=FMAX){sfx.fanfare();say("Bordée prête ! Un bouton doré vient d'apparaître.","good");if(!P.seen.bordee)later(introBordee,700);const b=$("mFire").getBoundingClientRect();burst(b.left+b.width/2,b.top,["#c99a3d","#fff6c0","#e8712d"],18,4)}}
 function bordee(r,c){furie=0;drawFurie();over=true;ammo--;hud();sfx.sink();shake();const g=$("grid"),a=cells[r*N+c];
@@ -546,7 +547,7 @@ function paintAll(){for(let r=0;r<N;r++)for(let c=0;c<N;c++)paint(r,c)}
 function hudGold(){$("gold2").textContent=P.gold}
 function need(){return ships.reduce((a,s)=>a+(s.cells.length-s.hits),0)}
 function spare(){return ammo-need()}
-function hud(){const sp=spare();$("lives").innerHTML=`<span class="ammo${sp<=0?" red":sp<=1?" warn":""}"><svg viewBox="0 0 24 24" width="20" height="20"><circle cx="12" cy="12" r="9" fill="currentColor"/><circle cx="9" cy="9" r="3" fill="#fff" opacity=".35"/></svg><b>${ammo}</b><small>${sp>0?"+"+sp:"0"} marge</small></span>`;
+function hud(){const sp=spare();$("lives").innerHTML=`<span class="ammo${sp<=0?" red":sp<=1?" warn":""}"><svg viewBox="0 0 24 24" width="20" height="20"><circle cx="12" cy="12" r="9" fill="currentColor"/><circle cx="9" cy="9" r="3" fill="#fff" opacity=".35"/></svg><b>${ammo}</b><small>${sp>0?"+"+sp+" marge":"compte juste"}</small></span>`;
   $("fleet").innerHTML=ships.map(s=>s.kraken?`<svg class="sh${s.sunk?" x":""}" viewBox="0 0 24 18"><path d="M5 11a7 7 0 0 1 14 0zM6 11c-2 2-2 4 0 6M10 11v6M14 11v6M18 11c2 2 2 4 0 6"/></svg>`:`<svg class="sh${s.sunk?" x":""}${s.isCap?" cap":""}" viewBox="0 0 ${14+s.cells.length*8} 18"><path d="M1 10H${13+s.cells.length*8}L${9+s.cells.length*8} 16H5Z M${6+s.cells.length*2} 10V3H${10+s.cells.length*5}V10"/></svg>`).join("");
   $("spyBtn").innerHTML=IC.spy+P.spy;$("spyBtn").disabled=!P.spy;$("powBtn").innerHTML=IC.pow+P.pow;$("powBtn").disabled=!P.pow;hudGold()}
 function say(t,k){const m=$("msg");m.textContent=t;m.className="msg"+(k?" "+k:"")}
@@ -589,7 +590,7 @@ function refreshPieces(s){(s.pieces||[]).forEach(w=>{if(!w.dataset.art){w.datase
 function shockwave(r0,c0,strength=1){cells.forEach((el,i)=>{const r=i/N|0,c=i%N,dx=c-c0,dy=r-r0,d=Math.hypot(dx,dy);if(d<.5||d>5.5)return;const k=strength/(1+d*.6),ux=dx/d,uy=dy/d;
     el.animate([{transform:"none",filter:"brightness(1)"},{transform:`translate(${(ux*16*k).toFixed(1)}%,${(uy*16*k).toFixed(1)}%) scale(${(1+.14*k).toFixed(3)})`,filter:`brightness(${(1+.5*k).toFixed(2)})`,offset:.3},{transform:"none",filter:"brightness(1)"}],{duration:520,delay:d*42,easing:"ease-out"})})}
 function mistake(t,r,c){furie=0;drawFurie();pop(...center(r,c).slice(0,2),"− 1 boulet","#c6472f",22);shake();say(t,"bad");hud();checkAmmo()}
-function checkAmmo(){if(ammo<need()){later(()=>wreck("Plus assez de boulets pour couler la flotte."),500)}else if(spare()===0)say("Dernier boulet de marge : plus aucune erreur possible.","bad")}
+function checkAmmo(){if(ammo<need()){later(()=>wreck("Plus assez de boulets pour couler la flotte."),500)}else if(spare()===0&&P.pow===0)say("Compte juste : plus aucune erreur possible.","bad")}
 function alarm(t,r,c){furie=0;drawFurie();shake();say(t,"bad");if(fuseTick){fuseLeft=Math.max(.5,fuseLeft-5);$("fuse").classList.toggle("low",fuseLeft<=3.5);drawFuse();pop(innerWidth/2,$("fuse").getBoundingClientRect().top+10,"− 5 s","#c6472f",18)}}
 function shipCenter(s){const a=center(...s.cells[0]),b=center(...s.cells[s.cells.length-1]);return[(a[0]+b[0])/2,(a[1]+b[1])/2,a[2]]}
 function sink(s){s.sunk=true;s.rip=0;over=true;if(fuseTick)fusePush(4+s.cells.length*2);addFurie(2);(s.pieces||[]).forEach(w=>w.remove());s.pieces=[];const o=addShip(s),sv=o.el.querySelector("svg"),[cx0,cy0,w]=shipCenter(s),R=w*(s.cells.length*.5+.8);
@@ -673,7 +674,7 @@ function tutorial(){sheet(`<div class="kick">Ordre du capitaine</div><h2>Trouve 
   <div class="step">${D("")}<span>Touche une case pour la <b>sonder</b>. Un chiffre apparaît.</span></div>
   <div class="step">${D("w n2","2")}<span>Il compte les morceaux de navire dans les <b>8 cases autour</b>.</span></div>
   <div class="step">${D("h")}<span>Sûr de toi ? Passe en <b>Feu !</b> et tire au canon. Un navire <b>touché riposte</b> tant qu'il flotte : achève-le vite.</span></div></div>
-  <p class="sm">Tu as juste assez de boulets pour la flotte, plus une petite marge : chaque tir dans l'eau en gaspille un. La flotte riposte quand la mèche est consumée ; chaque navire coulé la rallonge. Enchaîne les bons coups pour charger la <b>Bordée</b>.</p>`,[["Larguer les amarres",()=>{P.seen.tuto=1;save();closeSheet()}]])}
+  <p class="sm">Tu as <b>exactement</b> autant de boulets que de coques à détruire : un seul tir dans l'eau et la flotte est hors de portée. La poudre rattrape un tir manqué. La flotte riposte quand la mèche est consumée ; chaque navire coulé la rallonge. Enchaîne les bons coups pour charger la <b>Bordée</b>.</p>`,[["Larguer les amarres",()=>{P.seen.tuto=1;save();closeSheet()}]])}
 const INTRO={cap:["Capitaine en vue","Le plus grand navire de cette mer est le sien. Coule-le, puis bats-le au duel pour lui prendre son fragment de carte."],kraken:["Le Kraken","Un monstre de 2 × 2 cases veille sur l'île. Il se coule comme un navire."]};
 function intro(k){sfx.flag();sheet(`<div class="kick">Attention</div><h2>${INTRO[k][0]}</h2><p>${INTRO[k][1]}</p>`,[["Compris",()=>{P.seen[k]=1;save();closeSheet()}]])}
 function introBordee(){sfx.fanfare();const g=Array.from({length:25},(_,i)=>{const r=i/5|0,c=i%5;return `<i class="${r===2&&c===2?"t":r===2||c===2?"x":""}"></i>`}).join("");
