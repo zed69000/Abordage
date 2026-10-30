@@ -101,7 +101,14 @@ button:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
 .item svg{width:16px;height:16px}
 .item:disabled{opacity:.35}
 .stage{flex:1;min-height:0;container-type:size;display:grid;place-items:center}
-.board{position:relative;width:min(100cqw,100cqh);height:min(100cqw,100cqh);border-radius:12px;overflow:hidden;background:var(--sea);container-type:inline-size;
+.frame{display:grid;grid-template-columns:22px auto;grid-template-rows:22px auto;--bs:min(100cqw - 22px,100cqh - 22px)}
+.labc,.labr{display:grid;gap:3px;padding:0 6px;font:400 .95rem var(--fd);color:var(--ink);align-items:center;justify-items:center}
+.labc{grid-template-columns:repeat(var(--n),1fr);width:var(--bs)}
+.labr{grid-template-rows:repeat(var(--n),1fr);padding:6px 0;height:var(--bs)}
+.labc span,.labr span{line-height:1;transition:opacity .3s,color .3s}
+.labc span.done,.labr span.done{opacity:.3}
+.labc span.over,.labr span.over{color:var(--red);font-weight:700}
+.board{position:relative;width:var(--bs);height:var(--bs);border-radius:12px;overflow:hidden;background:var(--sea);container-type:inline-size;
   box-shadow:inset 0 0 0 3px var(--parch3),inset 0 0 0 5px var(--inkl)}
 .board.shake{animation:shake .32s}
 @keyframes shake{25%{transform:translateX(-5px)}50%{transform:translateX(4px)}75%{transform:translateX(-2px)}}
@@ -137,7 +144,18 @@ button:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
 .c.g{box-shadow:inset 0 0 0 2px var(--red)}
 .c.r{background:var(--parch2);box-shadow:inset 0 0 0 2px var(--ink2);cursor:pointer}
 .c.r::after{content:"";position:absolute;inset:16%;background:var(--hull) center/100% no-repeat}
-.c.f::after{content:"";position:absolute;inset:22%;background:var(--flag) center/100% no-repeat}
+.c.f{color:rgba(43,29,18,.55);font-size:calc(100cqw / var(--n) * .5)}
+.c.e{background:var(--parch);box-shadow:inset 0 0 0 1.5px rgba(122,91,62,.5);cursor:default}
+.c.e::after{content:"";width:18%;height:18%;border-radius:50%;background:var(--parch3)}
+.fb{display:inline-flex;gap:1px;align-items:center;margin-right:4px}
+.fb i{width:6px;height:9px;border-radius:1.5px;background:var(--ink);opacity:.9;transition:all .3s}
+.fleet{gap:2px 0;row-gap:2px}
+.furie{display:none}
+.fb.x i{opacity:.22}.fb.cap i{background:var(--red)}
+.mode .cnt{font:800 .72rem var(--f);background:var(--brass);color:var(--ink2);border-radius:999px;padding:2px 7px;margin-left:2px}
+.mode[aria-pressed="true"] .cnt{background:var(--parch2)}
+.mode:disabled{opacity:.45}
+#fuse{display:none}
 .fl{position:absolute;inset:0;padding:6px;pointer-events:none;z-index:2}
 .ship{position:absolute;border-radius:6%}
 .piece{position:absolute;overflow:hidden;border-radius:9%;pointer-events:none;animation:swell 3.6s ease-in-out infinite;animation-delay:var(--d,0s);--amp:-3px}
@@ -287,7 +305,7 @@ button:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
     <div class="voy" id="voy"></div>
     <div class="hud"><div class="fleet" id="fleet"></div><div class="items"><button class="item" id="spyBtn"></button><button class="item" id="powBtn"></button></div><div class="lives" id="lives"></div></div>
     <div class="fuse" id="fuse"><span class="lbl" id="fuseLbl">Riposte</span><div class="meche"><div class="burnt" id="burnt"></div><i class="spark" id="spark"></i></div></div>
-    <div class="stage"><div class="board" id="board"><div class="waves" id="waves"></div><canvas class="rip" id="rip"></canvas><div class="grid" id="grid"></div><div class="fl" id="fl"></div><div class="banner"><span id="banner"></span></div></div></div>
+    <div class="stage"><div class="frame"><div></div><div class="labc" id="labc"></div><div class="labr" id="labr"></div><div class="board" id="board"><div class="waves" id="waves"></div><canvas class="rip" id="rip"></canvas><div class="grid" id="grid"></div><div class="fl" id="fl"></div><div class="banner"><span id="banner"></span></div></div></div></div>
     <div class="msg" id="msg"></div>
     <div class="ctrl"><button class="mode" id="mSonar" aria-pressed="true"></button><button class="mode" id="mFire" aria-pressed="false"></button><button class="mode" id="mBordee" aria-pressed="false" hidden></button></div>
   <div class="vol" id="vol"></div>
@@ -296,6 +314,137 @@ button:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
 </div>
 <canvas id="fx"></canvas>
 
+<script>
+// Abordage — générateur et solveur de grilles "Bimaru × démineur".
+// Indices : nombre de coques par ligne / colonne, flotte, cases sondées (chiffre = coques dans les 8 voisines,
+// ou coque repérée). Règle : les navires ne se touchent jamais, même en diagonale.
+// Le solveur ne fait que de la propagation (jamais d'hypothèse) : une grille acceptée est donc résoluble
+// à 100 % par déduction, comme un sudoku bien fait.
+(function(root){
+const U=0,W=1,S=2; // inconnu, eau, coque
+function rng(seed){let s=seed>>>0||1;return()=>{s^=s<<13;s>>>=0;s^=s>>>17;s^=s<<5;s>>>=0;return s/4294967296}}
+function placeFleet(N,fleet,rand){
+  for(let tries=0;tries<400;tries++){
+    const b=Array.from({length:N},()=>Array(N).fill(-1)),ships=[];let ok=true;
+    for(let si=0;si<fleet.length&&ok;si++){const L=fleet[si];let placed=false;
+      for(let a=0;a<200&&!placed;a++){const v=rand()<.5,r=rand()*(v?N-L+1:N)|0,c=rand()*(v?N:N-L+1)|0;const cells=[];let fine=true;
+        for(let k=0;k<L;k++){const y=r+(v?k:0),x=c+(v?0:k);cells.push([y,x]);
+          for(let dy=-1;dy<=1&&fine;dy++)for(let dx=-1;dx<=1;dx++){const yy=y+dy,xx=x+dx;if(yy>=0&&xx>=0&&yy<N&&xx<N&&b[yy][xx]>=0){fine=false;break}}
+          if(!fine)break}
+        if(fine){cells.forEach(([y,x])=>b[y][x]=si);ships.push({cells,hits:0,sunk:false});placed=true}}
+      if(!placed)ok=false}
+    if(ok)return[b,ships]}
+  return null}
+function nb8(N,r,c){const o=[];for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++){if(!dr&&!dc)continue;const y=r+dr,x=c+dc;if(y>=0&&x>=0&&y<N&&x<N)o.push([y,x])}return o}
+// --- solveur ---
+// k : grille de connaissance (U/W/S). clues : {rows,cols,fleet,nums:[[r,c,n]], spotted:[[r,c]]}
+function solve(N,clues,k0){
+  const k=k0?k0.map(r=>r.slice()):Array.from({length:N},()=>Array(N).fill(U));
+  clues.spotted.forEach(([r,c])=>k[r][c]=S);
+  clues.nums.forEach(([r,c])=>k[r][c]=W);
+  let steps=0,changed=true;
+  const set=(r,c,v)=>{if(k[r][c]===U){k[r][c]=v;changed=true;return true}if(k[r][c]!==v)throw new Error("contradiction");return false};
+  while(changed){changed=false;steps++;
+    // R0 : diagonales d'une coque = eau
+    for(let r=0;r<N;r++)for(let c=0;c<N;c++)if(k[r][c]===S)[[1,1],[1,-1],[-1,1],[-1,-1]].forEach(([dr,dc])=>{const y=r+dr,x=c+dc;if(y>=0&&x>=0&&y<N&&x<N&&k[y][x]===U)set(y,x,W)});
+    // R1 : comptes ligne / colonne
+    for(let r=0;r<N;r++){let s=0,u=[];for(let c=0;c<N;c++){if(k[r][c]===S)s++;else if(k[r][c]===U)u.push(c)}const rem=clues.rows[r]-s;if(rem<0||rem>u.length)throw new Error("contradiction");if(u.length){if(rem===0)u.forEach(c=>set(r,c,W));else if(rem===u.length)u.forEach(c=>set(r,c,S))}}
+    for(let c=0;c<N;c++){let s=0,u=[];for(let r=0;r<N;r++){if(k[r][c]===S)s++;else if(k[r][c]===U)u.push(r)}const rem=clues.cols[c]-s;if(rem<0||rem>u.length)throw new Error("contradiction");if(u.length){if(rem===0)u.forEach(r=>set(r,c,W));else if(rem===u.length)u.forEach(r=>set(r,c,S))}}
+    // R2 : chiffres de sonde (+ règle de sous-ensemble)
+    const cons=[];clues.nums.forEach(([r,c,n])=>{let s=0;const u=[];nb8(N,r,c).forEach(([y,x])=>{if(k[y][x]===S)s++;else if(k[y][x]===U)u.push(y*N+x)});const rem=n-s;if(rem<0||rem>u.length)throw new Error("contradiction");if(u.length)cons.push({u,rem})});
+    cons.forEach(co=>{if(co.rem===0)co.u.forEach(i=>set(i/N|0,i%N,W));else if(co.rem===co.u.length)co.u.forEach(i=>set(i/N|0,i%N,S))});
+    for(const a of cons)for(const b of cons){if(a===b||!a.u.length||!b.u.length)continue;if(a.u.length<b.u.length&&a.u.every(i=>b.u.includes(i))){const diff=b.u.filter(i=>!a.u.includes(i)),dr=b.rem-a.rem;if(dr===0)diff.forEach(i=>set(i/N|0,i%N,W));else if(dr===diff.length)diff.forEach(i=>set(i/N|0,i%N,S))}}
+    // R3 : une coque "coincée" (eau ou bord des deux côtés d'un axe) force l'autre axe ; une coque isolée de longueur 1 si tous ses 4 voisins sont eau -> rien à faire
+    for(let r=0;r<N;r++)for(let c=0;c<N;c++){if(k[r][c]!==S)continue;
+      const h=[[0,-1],[0,1]],v=[[-1,0],[1,0]];const blocked=d=>d.every(([dr,dc])=>{const y=r+dr,x=c+dc;return!(y>=0&&x>=0&&y<N&&x<N)||k[y][x]===W});
+      const hasS=d=>d.some(([dr,dc])=>{const y=r+dr,x=c+dc;return y>=0&&x>=0&&y<N&&x<N&&k[y][x]===S});
+      if(hasS(h))v.forEach(([dr,dc])=>{const y=r+dr,x=c+dc;if(y>=0&&x>=0&&y<N&&x<N&&k[y][x]===U)set(y,x,W)});
+      if(hasS(v))h.forEach(([dr,dc])=>{const y=r+dr,x=c+dc;if(y>=0&&x>=0&&y<N&&x<N&&k[y][x]===U)set(y,x,W)})}
+    // R4 : flotte. Segments connus -> navires identifiés ; une case inconnue qu'aucun navire restant ne peut couvrir = eau ;
+    //      le plus grand navire restant n'a qu'un seul emplacement possible -> coques.
+    const segs=segments(N,k);const remaining=fleet_remaining(clues.fleet,segs,N,k);
+    if(remaining){const maxL=Math.max(0,...remaining);
+      // emplacements possibles pour chaque longueur
+      const canCover=Array.from({length:N},()=>Array(N).fill(false));const placesByL={};
+      remaining.forEach(L=>{if(placesByL[L])return;const pl=[];
+        for(let r=0;r<N;r++)for(let c=0;c<N;c++)for(const v of[0,1]){if(L===1&&v)continue;const cells=[];let ok=true;
+          for(let i=0;i<L;i++){const y=r+(v?i:0),x=c+(v?0:i);if(y>=N||x>=N||k[y][x]===W){ok=false;break}cells.push([y,x])}
+          if(!ok)continue;
+          // extrémités doivent être eau/bord ; pas de coque connue en diagonale ou collée
+          const ends=v?[[r-1,c],[r+L,c]]:[[r,c-1],[r,c+L]];if(ends.some(([y,x])=>y>=0&&x>=0&&y<N&&x<N&&k[y][x]===S)){ok=false}
+          if(ok){for(const[y,x]of cells){for(const[yy,xx]of nb8(N,y,x)){if(k[yy][xx]===S&&!cells.some(([a,b])=>a===yy&&b===xx)){ok=false;break}}if(!ok)break}}
+          if(!ok)continue;
+          // ligne/colonne : doit rester assez de place
+          const need=cells.filter(([y,x])=>k[y][x]===U).length;
+          if(v){let s=0;for(let i=0;i<N;i++)if(k[i][c]===S)s++;if(s+need>clues.cols[c])ok=false;const rowsNeed={};cells.forEach(([y,x])=>{if(k[y][x]===U){let ss=0;for(let j=0;j<N;j++)if(k[y][j]===S)ss++;if(ss+1>clues.rows[y])ok=false}})}
+          else{let s=0;for(let j=0;j<N;j++)if(k[r][j]===S)s++;if(s+need>clues.rows[r])ok=false;cells.forEach(([y,x])=>{if(k[y][x]===U){let ss=0;for(let i=0;i<N;i++)if(k[i][x]===S)ss++;if(ss+1>clues.cols[x])ok=false}})}
+          if(!ok)continue;
+          // chiffres de sonde : chaque sonde voisine doit pouvoir accepter les nouvelles coques
+          for(const[sr,sc,n]of clues.nums){let s=0;nb8(N,sr,sc).forEach(([y,x])=>{if(k[y][x]===S||cells.some(([a,b])=>a===y&&b===x))s++});if(s>n){ok=false;break}}
+          if(!ok)continue;
+          pl.push(cells)}
+        placesByL[L]=pl});
+      remaining.forEach(L=>placesByL[L].forEach(cells=>cells.forEach(([y,x])=>canCover[y][x]=true)));
+      for(let r=0;r<N;r++)for(let c=0;c<N;c++)if(k[r][c]===U&&!canCover[r][c])set(r,c,W);
+      if(maxL>0){const pl=placesByL[maxL];const cnt=remaining.filter(L=>L===maxL).length;if(pl.length===0)throw new Error("contradiction");
+        if(cnt===1&&pl.length===1)pl[0].forEach(([y,x])=>{if(k[y][x]===U)set(y,x,S)});
+        else if(pl.length>0){// cases communes à tous les emplacements du plus grand navire (s'il n'y en a qu'un de cette taille)
+          if(cnt===1){const common=pl[0].filter(([y,x])=>pl.every(p=>p.some(([a,b])=>a===y&&b===x)));common.forEach(([y,x])=>{if(k[y][x]===U)set(y,x,S)})}}}
+    }
+  }
+  const done=k.every(r=>r.every(v=>v!==U));
+  return{k,done,steps}}
+function segments(N,k){// composantes de coques connues (horizontales/verticales)
+  const seen=Array.from({length:N},()=>Array(N).fill(false)),out=[];
+  for(let r=0;r<N;r++)for(let c=0;c<N;c++){if(k[r][c]!==S||seen[r][c])continue;const cells=[[r,c]];seen[r][c]=true;
+    let x=c+1;while(x<N&&k[r][x]===S){cells.push([r,x]);seen[r][x]=true;x++}
+    if(cells.length===1){let y=r+1;while(y<N&&k[y][c]===S){cells.push([y,c]);seen[y][c]=true;y++}}
+    // un segment est "fermé" si ses deux bouts sont eau/bord (dans son axe) et, pour un singleton, dans les deux axes
+    const v=cells.length>1&&cells[0][1]===cells[1][1];const f=cells[0],e=cells[cells.length-1];
+    const isW=(y,x)=>!(y>=0&&x>=0&&y<N&&x<N)||k[y][x]===W;
+    let closed;if(cells.length>1)closed=v?isW(f[0]-1,f[1])&&isW(e[0]+1,e[1]):isW(f[0],f[1]-1)&&isW(e[0],e[1]+1);
+    else closed=isW(r-1,c)&&isW(r+1,c)&&isW(r,c-1)&&isW(r,c+1);
+    out.push({cells,closed})}
+  return out}
+function fleet_remaining(fleet,segs,N,k){const rem=fleet.slice().sort((a,b)=>b-a);
+  for(const sg of segs){if(!sg.closed)continue;const i=rem.indexOf(sg.cells.length);if(i<0)return null;rem.splice(i,1)}
+  // segments ouverts : ils appartiennent à un navire au moins aussi long -> on ne retire rien, mais on vérifie la cohérence
+  return rem}
+// --- générateur ---
+// Retourne {board,ships,rows,cols,nums,spotted,difficulty} ; nums/spotted = sondes offertes au départ.
+function makePuzzle(N,fleet,seed,opts={}){
+  const rand=rng(seed);const maxGivens=opts.maxGivens??N;const preferShip=opts.preferShip??.25;
+  for(let attempt=0;attempt<60;attempt++){
+    const placed=placeFleet(N,fleet,rand);if(!placed)continue;const[board,ships]=placed;
+    const rows=board.map(r=>r.filter(v=>v>=0).length),cols=Array.from({length:N},(_,c)=>board.reduce((a,r)=>a+(r[c]>=0?1:0),0));
+    const cnt=(r,c)=>nb8(N,r,c).filter(([y,x])=>board[y][x]>=0).length;
+    const clues={rows,cols,fleet:fleet.slice(),nums:[],spotted:[]};
+    let res;try{res=solve(N,clues)}catch(e){continue}
+    let guard=0;
+    while(!res.done&&guard++<maxGivens*3){
+      // candidats : cases encore inconnues pour le solveur ; on choisit celle qui débloque le plus
+      const cand=[];for(let r=0;r<N;r++)for(let c=0;c<N;c++)if(res.k[r][c]===U)cand.push([r,c]);
+      if(!cand.length)break;
+      // échantillon pour la vitesse
+      const sample=cand.sort(()=>rand()-.5).slice(0,Math.min(cand.length,14));
+      let best=null,bestGain=-1;
+      for(const[r,c]of sample){const isShip=board[r][c]>=0;if(isShip&&rand()>preferShip)continue;
+        const cl={...clues,nums:clues.nums.slice(),spotted:clues.spotted.slice()};if(isShip)cl.spotted.push([r,c]);else cl.nums.push([r,c,cnt(r,c)]);
+        let rr;try{rr=solve(N,cl)}catch(e){continue}
+        const gain=rr.k.flat().filter(v=>v!==U).length+(rr.done?1000:0);if(gain>bestGain){bestGain=gain;best={cl,rr}}}
+      if(!best)break;clues.nums=best.cl.nums;clues.spotted=best.cl.spotted;res=best.rr}
+    if(!res.done)continue;
+    if(clues.nums.length+clues.spotted.length>maxGivens)continue;
+    // minimisation : retirer les sondes inutiles
+    for(let i=clues.nums.length-1;i>=0;i--){const cl={...clues,nums:clues.nums.filter((_,j)=>j!==i)};try{if(solve(N,cl).done)clues.nums=cl.nums}catch(e){}}
+    for(let i=clues.spotted.length-1;i>=0;i--){const cl={...clues,spotted:clues.spotted.filter((_,j)=>j!==i)};try{if(solve(N,cl).done)clues.spotted=cl.spotted}catch(e){}}
+    const fin=solve(N,clues);
+    return{board,ships,rows,cols,nums:clues.nums,spotted:clues.spotted,difficulty:fin.steps,givens:clues.nums.length+clues.spotted.length}}
+  return null}
+root.Puzzle={makePuzzle,solve,placeFleet,U,W,S};
+})(typeof module!=="undefined"?module.exports:window);
+
+</script>
 <script>
 const $=id=>document.getElementById(id);
 const store={get(k){try{return localStorage.getItem(k)}catch(e){return null}},set(k,v){try{localStorage.setItem(k,v)}catch(e){}}};
@@ -448,21 +597,21 @@ const DESC_UNUSED={mer:["Mer à nettoyer","Une flotte ennemie y croise. Coule-la
 const EV=[
   {t:"Un navire marchand",p:"Cale pleine, équipage mou. Son capitaine te défie en duel : Sabre, Pistolet, Perroquet.",c:[["L'aborder",()=>duel({name:"Le Marchand",style:null,loot:20+P.ch*10+(Math.random()*20|0)},w=>startHunt())],["Laisser filer",()=>startHunt()]]},
   {t:"Un naufragé sur un radeau",p:"Un vieux loup de mer. En remerciement, il te donne un baril de poudre.",c:[["Le hisser à bord",()=>{P.pow++;save();startHunt()}]]},
-  {t:"Le chant des sirènes",p:"Les écouter rapporte 40 pièces, mais l'équipage arrive sonné : un boulet de marge en moins dans cette mer.",c:[["Écouter",()=>{P.gold+=40;save();startHunt(-1)}],["Boucher les oreilles",()=>startHunt()]]},
+  {t:"Le chant des sirènes",p:"Les écouter rapporte 40 pièces, mais l'équipage arrive sonné : une sonde de moins dans cette mer.",c:[["Écouter",()=>{P.gold+=40;save();startHunt(-1)}],["Boucher les oreilles",()=>startHunt()]]},
   {t:"Vent favorable",p:"Une brise chaude pousse ton navire. La vigie repère la flotte : un navire ennemi est visible dès le départ.",c:[["Hisser les voiles",()=>startHunt(0,1)]]}];
 function seaEvent(){const e=EV[Math.random()*EV.length|0];sfx.show(1);sheet(`<div class="kick">En mer</div><div class="big">${LM.mer}</div><h2>${e.t}</h2><p>${e.p}</p>`,e.c.map(([l,fn],k)=>[l,()=>{closeSheet();fn()},k?"alt":""]))}
 
 /* ---------- chasse ---------- */
-let fuseT=20,fuseLeft=20,fuseTick=null,furie=0,FMAX=6;
+const STORM=false;let fuseT=20,fuseLeft=20,fuseTick=null,furie=0,FMAX=6;
 function fuseDur(){return Math.max(10,26-(P.lvl-1)*.7-(P.ch-1)*3)*(curNd&&curNd.t==="cap"?.85:1)}
-function fuseStart(){fuseT=fuseDur();fuseLeft=fuseT;clearInterval(fuseTick);let last=performance.now();
+function fuseStart(){if(!STORM)return;fuseT=fuseDur();fuseLeft=fuseT;clearInterval(fuseTick);let last=performance.now();
   fuseTick=setInterval(()=>{const now=performance.now(),dt=(now-last)/1000;last=now;if(over||busy()||!started)return;ripTick(dt);fuseLeft-=dt;drawFuse();
     if(fuseLeft<=3.5&&!$("fuse").classList.contains("low")){$("fuse").classList.add("low")}
     if(fuseLeft<=0){fuseLeft=fuseT;$("fuse").classList.remove("low");volley()}},100)}
 function fuseStop(){clearInterval(fuseTick);fuseTick=null}
 function ripLoss(){return 10+P.lvl*4+(P.ch-1)*20}
 function ripDur(){return Math.max(4,8-(P.lvl-1)*.3-(P.ch-1)*1.5)}
-function armRip(s){if(s.sunk)return;s.rip=ripDur();s.ripT=s.rip;drawRip(s)}
+function armRip(s){if(!STORM||s.sunk)return;s.rip=ripDur();s.ripT=s.rip;drawRip(s)}
 function drawRip(s){(s.pieces||[]).forEach((w,i,a)=>{let r=w.querySelector(".rip");if(i<a.length-1){if(r)r.remove();return}if(!r){r=document.createElement("b");r.className="rip";w.appendChild(r)}r.style.setProperty("--k",(1-s.rip/s.ripT).toFixed(3));r.classList.toggle("hot",s.rip<=1.5)})}
 function ripTick(dt){ships.forEach(s=>{if(s.sunk||!s.rip)return;s.rip-=dt;if(s.rip<=0){s.rip=ripDur()+2;s.ripT=s.rip;shipFire(s)}drawRip(s)})}
 function shipFire(s){const w=(s.pieces||[]).slice(-1)[0];if(!w)return;const b=w.getBoundingClientRect(),x=b.left+b.width/2,y=b.top+b.height/2,h=$("gold2").getBoundingClientRect(),tx=h.left+h.width/2,ty=h.top+h.height/2;
@@ -476,7 +625,7 @@ function volley(){over=true;const bd=$("board").getBoundingClientRect();$("vol")
       const cl=document.elementFromPoint(x,y);if(cl&&cl.classList&&cl.classList.contains("c"))cl.animate([{transform:"scale(1.15)"},{transform:"none"}],{duration:300})}},i*170);
   setTimeout(()=>{const loss=ripLoss()*2;P.gold=Math.max(0,P.gold-loss);save();furie=0;drawFurie();pop(innerWidth/2,bd.top+bd.height/2,"− "+loss+" pièces","#c6472f",26);say("La flotte riposte ! Ta cale est éventrée : − "+loss+" pièces.","bad");hudGold();hud();over=false},800)}
 function drawFurie(){const b=$("furieBar");if(b)b.style.transform=`scaleX(${Math.min(1,furie/FMAX)})`;const ready=furie>=FMAX;$("mBordee").hidden=!ready;if(!ready&&mode==="bordee")setMode("fire")}
-function addFurie(n){const was=furie>=FMAX;furie=Math.min(FMAX,furie+n);drawFurie();if(!was&&furie>=FMAX){sfx.fanfare();say("Bordée prête ! Un bouton doré vient d'apparaître.","good");if(!P.seen.bordee)later(introBordee,700);const b=$("mFire").getBoundingClientRect();burst(b.left+b.width/2,b.top,["#c99a3d","#fff6c0","#e8712d"],18,4)}}
+function addFurie(n){if(!STORM)return;const was=furie>=FMAX;furie=Math.min(FMAX,furie+n);drawFurie();if(!was&&furie>=FMAX){sfx.fanfare();say("Bordée prête ! Un bouton doré vient d'apparaître.","good");if(!P.seen.bordee)later(introBordee,700);const b=$("mFire").getBoundingClientRect();burst(b.left+b.width/2,b.top,["#c99a3d","#fff6c0","#e8712d"],18,4)}}
 function bordee(r,c){furie=0;drawFurie();over=true;ammo--;hud();sfx.sink();shake();const g=$("grid"),a=cells[r*N+c];
   const h=document.createElement("div"),v=document.createElement("div");h.className="cross";v.className="cross";h.style.cssText=`left:0;right:0;top:${a.offsetTop}px;height:${a.offsetHeight}px`;v.style.cssText=`top:0;bottom:0;left:${a.offsetLeft}px;width:${a.offsetWidth}px;background:linear-gradient(180deg,transparent,#fff6c0,transparent)`;
   $("board").appendChild(h);$("board").appendChild(v);[h,v].forEach(e=>e.animate([{opacity:0,transform:"scale(1.2)"},{opacity:1,offset:.2},{opacity:0}],{duration:650}).onfinish=()=>e.remove());
@@ -485,12 +634,13 @@ function bordee(r,c){furie=0;drawFurie();over=true;ammo--;hud();sfx.sink();shake
     if(board[y][x]===-1){burst(px,py,["#f4e8c8","#b6d6d1"],4,2.5);revealAnim(revealWater(y,x).map(([yy,xx])=>[yy,xx,0]),1)}
     else{burst(px,py,["#e8712d","#c99a3d","#2b1d12"],8,4);sfx.hit();const sh=strike(y,x);if(sh)sunkList.push(sh)}},i*55));
   later(()=>{over=false;const run=k=>{if(k>=sunkList.length){checkWin();return}sink(sunkList[k]);const w=setInterval(()=>{if(!over){clearInterval(w);run(k+1)}},120)};run(0);if(!sunkList.length)say("Bordée ! La ligne et la colonne sont balayées.","good")},targets.length*55+300)}
-let N=5,FLEET=[],cfg=null,lvl=0,curNd=null,board=null,ships=[],state=[],mode="sonar",lives=3,ammo=0,started=false,over=false,timers2=[];
+let N=5,FLEET=[],cfg=null,lvl=0,curNd=null,board=null,ships=[],state=[],mode="sonar",lives=3,ammo=0,sondes=0,ROWS=[],COLS=[],started=false,over=false,timers2=[];
 const grid=$("grid");let cells=[],pressI=-1,lpT=null,lpDone=false;
 function capsFor(ch){return [0,1,2].map(k=>CAPN[(k+(ch-1)*3)%CAPN.length])}
 function levelType(){const open=P.frags.map((f,k)=>f?-1:k).filter(k=>k>=0);if(!open.length)return{t:"tresor"};if(P.lvl%3===0)return{t:"cap",cap:open[0]};return{t:"mer"}}
-function fleetFor(nd){const d=Math.min(10,P.lvl-1+(P.ch-1)*4);const base=[[5,[2,1,1]],[6,[2,2,1]],[6,[3,2,1]],[7,[3,2,1,1]],[7,[3,2,2,1]],[8,[3,2,2,1,1]],[8,[4,2,2,1,1]],[8,[4,3,2,1,1]],[9,[4,3,2,1,1]],[9,[4,3,2,2,1,1]],[10,[4,3,3,2,1,1]]][d];
-  const c={n:base[0],f:base[1].slice(),cap:nd.t==="cap"?nd.cap:null,kraken:nd.t==="tresor"};if(c.cap!=null){c.f[0]=Math.min(4,c.f[0]+1);c.n=Math.min(10,c.n+1)}if(c.kraken){c.n=Math.min(10,c.n+1)}return c}
+function fleetFor(nd){const d=Math.min(10,P.lvl-1+(P.ch-1)*4);const base=[[6,[3,2,1,1],4],[6,[3,2,2,1],3],[7,[3,2,2,1,1],3],[7,[4,3,2,1,1],3],[8,[4,3,2,2,1,1],3],[8,[4,3,3,2,1,1],2],[9,[4,3,3,2,2,1,1],2],[9,[5,4,3,2,2,1,1],2],[10,[5,4,3,3,2,2,1,1],2],[10,[5,4,4,3,2,2,1,1],1],[10,[5,4,4,3,3,2,2,1,1],1]][d];
+  const c={n:base[0],f:base[1].slice(),sondes:base[2],cap:nd.t==="cap"?nd.cap:null,kraken:nd.t==="tresor"};if(c.cap!=null){c.f[0]=Math.min(5,c.f[0]+1)}if(c.kraken){c.f[0]=5;c.f.sort((a,b)=>b-a)}return c}
+function seedFor(){if(!P.salt){P.salt=1+(Math.random()*1e9|0);save()}return((P.ch*131+P.lvl)*7919+P.salt)>>>0}
 function nextLevel(){P.lvl++;save();exitBoard(()=>{if(P.lvl%5===0){openPort();return}if(P.lvl>2&&Math.random()<.35){seaEvent();return}startHunt()})}
 function exitBoard(cb){closeSheet();over=true;$("fl").animate([{opacity:1},{opacity:0}],{duration:300,fill:"forwards"});let mx=0;
   cells.forEach((el,k)=>{const d=((k%N)+(k/N|0))*38;mx=Math.max(mx,d);el.animate([{transform:"none",opacity:1},{transform:"translateY(-18%) scale(1.08)",opacity:1,offset:.35},{transform:"translateY(60%) scale(.3) rotate(10deg)",opacity:0}],{duration:460,delay:d,easing:"cubic-bezier(.5,0,.7,.4)",fill:"forwards"})});
@@ -498,31 +648,38 @@ function exitBoard(cb){closeSheet();over=true;$("fl").animate([{opacity:1},{opac
   $("huntTitle").animate([{transform:"none",opacity:1},{transform:"translateY(-10px)",opacity:0}],{duration:350,delay:mx+100,fill:"forwards"});
   setTimeout(cb,mx+520)}
 function openPort(){const row=(ic,n,d,cost,ok)=>`<div class="si">${ic}<div class="t"><b>${n}</b><span>${d}</span></div><button data-b="${n}"${ok?"":" disabled"}><i class="coin"></i>${cost}</button></div>`;
-  const draw=()=>{sheet(`<div class="kick">Port franc</div><h2>${PORTN[P.lvl/5%PORTN.length|0]}</h2><p class="sm">Tu as <b>${P.gold}</b> pièces · équipage ${P.crew}/5</p><div class="shop">
-    ${row(IC.crew,"Matelot","Un canonnier de plus : un boulet de marge en plus à chaque mer.",40,P.gold>=40&&P.crew<5)}
+  const draw=()=>{sheet(`<div class="kick">Port franc</div><h2>${PORTN[P.lvl/5%PORTN.length|0]}</h2><p class="sm">Tu as <b>${P.gold}</b> pièces · vigies ${P.crew}/2</p><div class="shop">
+    ${row(IC.crew,"Vigie","Une sonde de plus à chaque mer, pour toujours.",60,P.gold>=60&&P.crew<2)}
     ${row(IC.pow,"Poudre","Ton prochain tir manqué ne gaspille pas de boulet.",15,P.gold>=15)}
-    ${row(IC.spy,"Longue-vue","Révèle une case d'eau sûre.",20,P.gold>=20)}</div>`,[["Reprendre la mer",()=>{closeSheet();startHunt()}]]);
-    $("card").querySelectorAll(".si button").forEach(b=>b.onclick=()=>{const k=b.dataset.b;sfx.coin();if(k==="Matelot"){P.gold-=40;P.crew++}else if(k==="Poudre"){P.gold-=15;P.pow++}else{P.gold-=20;P.spy++}save();hudGold();draw()})};
+    ${row(IC.spy,"Longue-vue","Une sonde de plus, à utiliser quand tu veux.",20,P.gold>=20)}</div>`,[["Reprendre la mer",()=>{closeSheet();startHunt()}]]);
+    $("card").querySelectorAll(".si button").forEach(b=>b.onclick=()=>{const k=b.dataset.b;sfx.coin();if(k==="Vigie"){P.gold-=60;P.crew++}else if(k==="Poudre"){P.gold-=15;P.pow++}else{P.gold-=20;P.spy++}save();hudGold();draw()})};
   draw()}
 function startHunt(lifeMod=0,peek=0){timers.forEach(clearTimeout);timers=[];closeSheet();const nd=levelType();nd.name=nd.t==="tresor"?"Île du Crâne":nd.t==="cap"?P.caps[nd.cap][1]:SEAN[(P.lvl*7+P.ch)%SEAN.length];curNd=nd;cfg=fleetFor(nd);N=cfg.n;FLEET=cfg.f;
   $("fl").getAnimations().forEach(a=>a.cancel());$("huntTitle").getAnimations().forEach(a=>a.cancel());document.querySelectorAll(".ball,.flash,.smoke,.puff").forEach(e=>e.remove());
-  build();[board,ships]=generate();state=Array.from({length:N},()=>Array(N).fill(""));
-  lives=Math.max(1,P.crew+lifeMod);ammo=need()+Math.max(0,P.crew+lifeMod);started=false;over=false;setMode("sonar");$("sHunt").hidden=false;
+  build();const pz=Puzzle.makePuzzle(N,FLEET,seedFor())||Puzzle.makePuzzle(N,FLEET,seedFor()+1);board=pz.board;ships=pz.ships;ROWS=pz.rows;COLS=pz.cols;
+  ships.forEach((sh,i)=>{sh.name=i===0&&cfg.kraken?"Le Kraken":i===0&&cfg.cap!=null?P.caps[cfg.cap][1]:SHIPN[(i*3+P.lvl)%SHIPN.length];sh.isCap=i===0&&cfg.cap!=null});
+  state=Array.from({length:N},()=>Array(N).fill(""));pz.nums.forEach(([r,c])=>state[r][c]="w");pz.spotted.forEach(([r,c])=>state[r][c]="r");
+  sondes=Math.max(0,cfg.sondes+P.crew+lifeMod);lives=sondes;ammo=need();started=true;over=false;setMode("sonar");$("sHunt").hidden=false;labels(true);
   $("huntTitle").firstChild.textContent=nd.name;$("huntSub").textContent="Mer "+P.lvl+" · "+(nd.t==="cap"?"Capitaine "+P.caps[nd.cap][0]+" en vue":nd.t==="tresor"?"Le Kraken garde le trésor":"Fragments "+P.frags.filter(Boolean).length+"/3");
   fuseStop();fuseT=fuseDur();fuseLeft=fuseT;$("fuse").classList.remove("low");drawFuse();furie=0;drawFurie();
   $("waves").innerHTML=wavesHTML();paintAll();hud();
+  const giv=[...pz.nums.map(([r,c])=>[r,c]),...pz.spotted];giv.forEach(([r,c],i)=>later(()=>{const[x,y,w]=center(r,c);ring(x,y,w*1.3,"#2b1d12",500,2);sfx.ping(count(r,c));rippleFrom(r,c,[[r,c]],.6)},900+i*170));
   $("huntTitle").animate([{transform:"translateY(10px)",opacity:0},{transform:"none",opacity:1}],{duration:400,easing:"ease-out"});renderVoy();
   let mx=0;cells.forEach((el,k)=>{const d=((k%N)+(k/N|0))*34;mx=Math.max(mx,d);el.animate([{transform:"translateY(-40%) scale(.2)",opacity:0},{transform:"translateY(8%) scale(1.08)",opacity:1,offset:.65},{transform:"none"}],{duration:480,delay:d,easing:"cubic-bezier(.3,1.3,.5,1)",fill:"backwards"})});
   for(let i=0;i<3;i++)later(()=>{const el=cells[Math.random()*cells.length|0];if(el)addRipple(el.offsetLeft+el.offsetWidth/2,el.offsetTop+el.offsetWidth/2,el.offsetWidth,.8)},mx*.4+i*160);
   for(let i=0;i<5;i++)later(()=>sfx.blip(14-i*3),i*110);
-  say(nd.t==="cap"?"Son navire est le plus grand. Coule-le pour le fragment.":nd.t==="tresor"?"Coule tout, Kraken compris.":"Sonde l'eau, trouve la flotte, aborde.");
-  if(peek){later(()=>{const s=ships.find(s=>!s.kraken&&s.cells.length<=2)||ships[0];const[y,x]=s.cells[0];state[y][x]="g";paint(y,x);say("La vigie a repéré un navire !","good")},700)}
+  say(nd.t==="cap"?"Son navire est le plus grand. Coule-le pour le fragment.":nd.t==="tresor"?"Coule tout, Kraken compris.":"Compte, déduis, puis tire. Aucun boulet à perdre.");
+  if(peek){later(()=>{const s=ships.find(s=>s.cells.some(([y,x])=>!state[y][x]))||ships[0];const[y,x]=s.cells.find(([y,x])=>!state[y][x])||s.cells[0];state[y][x]="g";paint(y,x);say("La vigie a repéré un navire !","good")},700)}
   if(!P.seen.tuto)later(tutorial,500);else if(nd.t==="cap"&&!P.seen.cap)later(()=>intro("cap"),500);else if(nd.t==="tresor"&&!P.seen.kraken)later(()=>intro("kraken"),500)}
 function build(){$("board").style.setProperty("--n",N);grid.textContent="";$("fl").textContent="";cells=[];const fr=document.createDocumentFragment();for(let i=0;i<N*N;i++){const b=document.createElement("button");b.className="c";b.dataset.i=i;b.style.setProperty("--d",(-((i%N)+(i/N|0))*.26).toFixed(2)+"s");fr.appendChild(b);cells.push(b)}grid.appendChild(fr)}
 function typeAt(l){if(l%5===0)return"port";if(l%3===0)return"cap";return"mer"}
 function renderVoy(){const left=P.frags.filter(f=>!f).length;let h="";const from=Math.max(1,P.lvl-1);for(let l=from;l<from+7;l++){const t=l<P.lvl?"done":"",ty=typeAt(l),cur=l===P.lvl;
   h+=(l>from?'<i></i>':'')+`<span class="${t}${cur?" cur":""}${ty==="cap"?" cap":""}">${ty==="port"?IC.anchor:ty==="cap"?IC.skull:IC.sail}</span>`}
   h+='<i></i><span class="tres">'+IC.frag+'</span>';$("voy").innerHTML=h}
+function labels(init){if(init){$("labc").style.setProperty("--n",N);$("labr").style.setProperty("--n",N);$("labc").innerHTML=COLS.map(v=>`<span>${v}</span>`).join("");$("labr").innerHTML=ROWS.map(v=>`<span>${v}</span>`).join("")}
+  const isS=v=>v==="h"||v==="s"||v==="r"||v==="g";const lc=$("labc").children,lr=$("labr").children;
+  for(let r=0;r<N;r++){let k=0;for(let c=0;c<N;c++)if(isS(state[r][c]))k++;const e=lr[r];if(e){e.className=k===ROWS[r]?"done":k>ROWS[r]?"over":""}}
+  for(let c=0;c<N;c++){let k=0;for(let r=0;r<N;r++)if(isS(state[r][c]))k++;const e=lc[c];if(e){e.className=k===COLS[c]?"done":k>COLS[c]?"over":""}}}
 function inB(r,c){return r>=0&&c>=0&&r<N&&c<N}
 function nb(r,c){const o=[];for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++)if((dr||dc)&&inB(r+dr,c+dc))o.push([r+dr,c+dc]);return o}
 function generate(){for(;;){const b=Array.from({length:N},()=>Array(N).fill(-1)),sh=[];let ok=true;const free=(y,x)=>inB(y,x)&&b[y][x]===-1&&nb(y,x).every(([yy,xx])=>b[yy][xx]===-1);
@@ -541,14 +698,15 @@ grid.addEventListener("pointerup",e=>release(e,true));grid.addEventListener("poi
 grid.addEventListener("click",e=>{if(e.detail!==0)return;const b=e.target.closest(".c");if(b){const i=+b.dataset.i;tap(i/N|0,i%N)}});
 grid.addEventListener("contextmenu",e=>e.preventDefault());
 function paint(r,c){const el=cells[r*N+c],s=state[r][c];let k="c",t="";
-  if(s==="w"){const n=count(r,c);k+=n?" w n"+Math.min(n,4):" w z";t=n?String(n):""}else if(s==="h")k+=" h";else if(s==="s")k+=" s";else if(s==="f")k+=" f";else if(s==="g")k+=" g";else if(s==="r")k+=" r";
-  if(el.className!==k)el.className=k;if(el.textContent!==t)el.textContent=t}
+  if(s==="w"){const n=count(r,c);k+=n?" w n"+Math.min(n,4):" w z";t=n?String(n):""}else if(s==="e")k+=" e";else if(s==="h")k+=" h";else if(s==="s")k+=" s";else if(s==="f"){k+=" f";t="×"}else if(s==="g")k+=" g";else if(s==="r")k+=" r";
+  if(el.className!==k)el.className=k;if(el.textContent!==t)el.textContent=t;labels()}
 function paintAll(){for(let r=0;r<N;r++)for(let c=0;c<N;c++)paint(r,c)}
 function hudGold(){$("gold2").textContent=P.gold}
 function need(){return ships.reduce((a,s)=>a+(s.cells.length-s.hits),0)}
 function spare(){return ammo-need()}
-function hud(){const sp=spare();$("lives").innerHTML=`<span class="ammo${sp<=0?" red":sp<=1?" warn":""}"><svg viewBox="0 0 24 24" width="20" height="20"><circle cx="12" cy="12" r="9" fill="currentColor"/><circle cx="9" cy="9" r="3" fill="#fff" opacity=".35"/></svg><b>${ammo}</b><small>${sp>0?"+"+sp+" marge":"compte juste"}</small></span>`;
-  $("fleet").innerHTML=ships.map(s=>s.kraken?`<svg class="sh${s.sunk?" x":""}" viewBox="0 0 24 18"><path d="M5 11a7 7 0 0 1 14 0zM6 11c-2 2-2 4 0 6M10 11v6M14 11v6M18 11c2 2 2 4 0 6"/></svg>`:`<svg class="sh${s.sunk?" x":""}${s.isCap?" cap":""}" viewBox="0 0 ${14+s.cells.length*8} 18"><path d="M1 10H${13+s.cells.length*8}L${9+s.cells.length*8} 16H5Z M${6+s.cells.length*2} 10V3H${10+s.cells.length*5}V10"/></svg>`).join("");
+function hud(){const sp=spare();$("lives").innerHTML=`<span class="ammo${sp<0?" red":""}"><svg viewBox="0 0 24 24" width="20" height="20"><circle cx="12" cy="12" r="9" fill="currentColor"/><circle cx="9" cy="9" r="3" fill="#fff" opacity=".35"/></svg><b>${ammo}</b><small>${sp>0?"+"+sp+" marge":"compte juste"}</small></span>`;
+  $("fleet").innerHTML=ships.map(s=>`<span class="fb${s.sunk?" x":""}${s.isCap?" cap":""}">${"<i></i>".repeat(s.cells.length)}</span>`).join("");
+  const sc=$("mSonar").querySelector(".cnt");if(sc)sc.textContent=sondes;$("mSonar").disabled=sondes<=0&&mode!=="sonar";
   $("spyBtn").innerHTML=IC.spy+P.spy;$("spyBtn").disabled=!P.spy;$("powBtn").innerHTML=IC.pow+P.pow;$("powBtn").disabled=!P.pow;hudGold()}
 function say(t,k){const m=$("msg");m.textContent=t;m.className="msg"+(k?" "+k:"")}
 function banner(t,cls){const e=$("banner");e.textContent=t;e.className="";void e.offsetWidth;e.className="go"+(cls?" "+cls:"")}
@@ -565,10 +723,10 @@ function startAt(r,c){let g=0;while((board[r][c]!==-1||count(r,c)>0)&&g<400){[bo
 function tap(r,c){if(busy())return;const s=state[r][c];if(s&&s!=="f"&&s!=="g"&&s!=="r")return;if(s==="f"){sfx.flag();say("Balise posée. Appui long pour la retirer.");return}
   if(s==="r"&&mode==="sonar"){sfx.click();say("Une coque est repérée ici. Passe en Feu ! pour tirer.");return}
   if(mode==="bordee"){if(furie<FMAX){setMode("fire");return}if(!started){started=true;hud();fuseStart()}setMode("fire");bordee(r,c);return}
-  if(mode==="sonar"){if(!started&&!state.flat().includes("g"))startAt(r,c);else if(!started){started=true;hud();fuseStart()}const v=board[r][c],[x,y,w]=center(r,c);
-    if(v>=0){sfx.crash();burst(x,y,["#2b1d12","#f4e8c8","#c99a3d"],14,4.5);ring(x,y,w*1.6,"#2b1d12",450,3);state[r][c]="r";paint(r,c);alarm("Boum ! Une coque : l'ennemi t'a entendu. Tire dessus avec Feu !",r,c);return}
-    const n=count(r,c);sfx.ping(n);const list=revealWater(r,c);revealAnim(rippleFrom(r,c,list),1000/RSPEED);addFurie(1);say(n?n+" morceau"+(n>1?"x":"")+" de navire autour.":"Eau calme tout autour.","good")}
-  else{if(!started){started=true;hud();fuseStart()}cannonShot(r,c)}}
+  if(mode==="sonar"){if(sondes<=0){sfx.click();shake();say("Plus de sonde : déduis avec les chiffres des bords, puis tire.","bad");return}const v=board[r][c],[x,y,w]=center(r,c);sondes--;hud();
+    if(v>=0){sfx.crash();burst(x,y,["#2b1d12","#f4e8c8","#c99a3d"],14,4.5);ring(x,y,w*1.6,"#2b1d12",450,3);state[r][c]="r";paint(r,c);say("Une coque ! Repérée : tire dessus avec Feu !","good");return}
+    const n=count(r,c);sfx.ping(n);revealAnim(rippleFrom(r,c,[[r,c]]),1000/RSPEED);say(n?n+" morceau"+(n>1?"x":"")+" de navire dans les 8 cases autour.":"Eau calme tout autour.","good")}
+  else cannonShot(r,c)}
 function cannonShot(r,c){const b=$("mFire").getBoundingClientRect(),[tx,ty]=center(r,c),x0=b.left+b.width/2,y0=b.top+6;
   const fl=document.createElement("div");fl.className="flash";fl.style.left=(x0-30)+"px";fl.style.top=(y0-30)+"px";document.body.appendChild(fl);fl.animate([{transform:"scale(.3)",opacity:1},{transform:"scale(1.3)",opacity:0}],{duration:200,easing:"ease-out"}).onfinish=()=>fl.remove();
   const sm=document.createElement("div");sm.className="smoke";sm.style.left=(x0-14)+"px";sm.style.top=(y0-14)+"px";document.body.appendChild(sm);sm.animate([{transform:"scale(.4)",opacity:.9},{transform:"scale(2.2) translateY(-20px)",opacity:0}],{duration:450,easing:"ease-out"}).onfinish=()=>sm.remove();
@@ -576,8 +734,8 @@ function cannonShot(r,c){const b=$("mFire").getBoundingClientRect(),[tx,ty]=cent
   ball.animate([{transform:`translate(${x0-7}px,${y0-7}px) scale(.6)`},{transform:`translate(${(x0+tx)/2-7}px,${Math.min(y0,ty)-60}px) scale(1.2)`,offset:.5},{transform:`translate(${tx-7}px,${ty-7}px) scale(.9)`}],{duration:190,easing:"cubic-bezier(.4,0,.8,.6)",fill:"forwards"}).onfinish=()=>{ball.remove();impact(r,c)}}
 function impact(r,c){const v=board[r][c],[x,y,w]=center(r,c);
   if(state[r][c]&&state[r][c]!=="f"&&state[r][c]!=="g"&&state[r][c]!=="r")return;ammo--;
-  if(v===-1){sfx.splash();burst(x,y,["#f4e8c8","#b6d6d1"],12,3.5);revealAnim(rippleFrom(r,c,revealWater(r,c),.8),1000/RSPEED);
-    if(P.pow>0){P.pow--;ammo++;save();hud();say("Plouf ! La poudre a sauvé ton boulet.","good");return}mistake("Plouf ! Un boulet perdu.",r,c);return}
+  if(v===-1){sfx.splash();burst(x,y,["#f4e8c8","#b6d6d1"],12,3.5);state[r][c]="e";revealAnim(rippleFrom(r,c,[[r,c]],.8),1000/RSPEED);
+    if(P.pow>0){P.pow--;ammo++;save();hud();say("Plouf ! La poudre a sauvé ton boulet.","good");return}mistake("Plouf ! Un boulet perdu : la flotte est hors de portée.",r,c);return}
   burst(x,y,["#6b4426","#e8712d","#c99a3d","#2b1d12"],18,5);ring(x,y,w*1.8,"#e8712d",450,4);shake();const sh=strike(r,c);
   addFurie(2);if(sh)sink(sh);else{sfx.hit();banner("Touché !");pop(x,y-10,"Touché !","#e8712d",22);armRip(ships[board[r][c]]);say("Touché ! Il riposte dans "+Math.ceil(ships[board[r][c]].rip)+" s : achève-le !","bad")}}
 function strike(r,c){state[r][c]="h";paint(r,c);const s=ships[board[r][c]];s.hits++;if(s.hits<s.cells.length)piece(r,c,s);return s.hits===s.cells.length?s:null}
@@ -605,7 +763,7 @@ function sink(s){s.sunk=true;s.rip=0;over=true;if(fuseTick)fusePush(4+s.cells.le
     s.cells.forEach(([y,x],i)=>later(()=>{paint(y,x);cells[y*N+x].animate([{transform:"scale(.6)"},{transform:"scale(1.1)",offset:.6},{transform:"none"}],{duration:380,easing:"cubic-bezier(.3,1.5,.5,1)"})},80+i*60));
     const gold=10+P.ch*6+s.cells.length*8+(Math.random()*10|0);P.gold+=gold;save();later(()=>{pop(cx0,cy0-10,"+"+gold,"#c99a3d",30);flyCoins(cx0,cy0,gold,Math.min(12,4+s.cells.length*2))},350);
     const drop=Math.random()<.22?["pow","spy"][Math.random()*2|0]:null;if(drop){P[drop]++;save();later(()=>{banner(drop==="pow"?"+1 poudre":"+1 longue-vue");hud()},900)}
-    const list=[];s.cells.forEach(([y,x])=>nb(y,x).forEach(([yy,xx])=>{if(board[yy][xx]===-1)revealWater(yy,xx,list)}));revealAnim(list.map(([y,x])=>[y,x,1]),40);hud();
+    const list=[];s.cells.forEach(([y,x])=>nb(y,x).forEach(([yy,xx])=>{if(board[yy][xx]===-1&&state[yy][xx]!=="w"&&state[yy][xx]!=="e"){state[yy][xx]="e";list.push([yy,xx,1])}}));revealAnim(list,40);hud();
     later(()=>banner(s.kraken?"Le Kraken sombre !":"Coulé !","r"),500);
     later(()=>{if(s.isCap)captainDuel(s);else{over=false;checkWin()}},s.isCap?1300:550)},300);
   say(s.name+" explose !","good")}
@@ -656,32 +814,30 @@ function duel(foe,done){const st={me:0,foe:0,round:1,busy:true,last:null};let ti
   draw(null);const v0=$("card").querySelector(".verdict");if(v0)v0.textContent="En garde…";$("card").querySelectorAll(".pick").forEach(b=>b.disabled=true);
   setTimeout(()=>{if(ended)return;st.busy=false;draw(null);arm()},900)}
 /* fin de mer */
-function checkWin(){if(!ships.every(s=>s.sunk))return;over=true;fuseStop();const nd=curNd;sfx.fanfare();const tres=nd.t==="tresor";const bonus=Math.max(0,spare())*15;P.gold+=bonus;save();hudGold();
+function checkWin(){if(!ships.every(s=>s.sunk))return;over=true;fuseStop();const nd=curNd;sfx.fanfare();const tres=nd.t==="tresor";const bonus=sondes*20;P.gold+=bonus;save();hudGold();
   later(()=>{if(tres){const g=200*P.ch;P.gold+=g;P.ch++;P.frags=[0,0,0];P.caps=capsFor(P.ch);P.lvl=0;P.seen.story=0;save();sheet(`<div class="kick">Chapitre ${P.ch-1} terminé</div><div class="big" style="color:var(--red)">${LM.tresor}</div><h2>Le trésor est à toi !</h2><p>+${g} pièces. Au fond du coffre, une nouvelle carte déchirée : trois autres capitaines.</p>`,[["Chapitre suivant",()=>{closeSheet();story()}]])}
-    else{const left=P.frags.filter(f=>!f).length;sheet(`<div class="kick">${nd.name}</div><h2>Mer nettoyée</h2><p>Bonus d'équipage : +${bonus} pièces.</p><p class="sm">${left?"Il reste "+left+" fragment"+(left>1?"s":"")+" à prendre aux capitaines."+(P.lvl%3===2?" Le prochain t'attend.":""):"L'Île du Crâne est la prochaine escale."}</p>`,[["Mer suivante",()=>{closeSheet();nextLevel()}]])}},900)}
+    else{const left=P.frags.filter(f=>!f).length;sheet(`<div class="kick">${nd.name}</div><h2>Mer nettoyée</h2><p>${sondes?"Sondes épargnées : +"+bonus+" pièces.":"Toutes les sondes ont servi."}</p><p class="sm">${left?"Il reste "+left+" fragment"+(left>1?"s":"")+" à prendre aux capitaines."+(P.lvl%3===2?" Le prochain t'attend.":""):"L'Île du Crâne est la prochaine escale."}</p>`,[["Mer suivante",()=>{closeSheet();nextLevel()}]])}},900)}
 function wreck(why){over=true;fuseStop();sfx.lose();let k=0;ships.forEach(s=>{(s.pieces||[]).forEach(w=>w.remove());if(s.sunk)return;later(()=>{const o=addShip(s);o.el.style.opacity=".55"},200+(k++)*150)});
-  const loss=Math.round(P.gold*.2);P.gold-=loss;save();hudGold();
-  later(()=>sheet(`<div class="kick">Naufrage</div><div class="big">${IC.skull}</div><h2>${why?"Soute vide":"Ton navire sombre"}</h2><p>${why||"L'équipage regagne la côte à la nage."} ${loss?"Tu perds "+loss+" pièces dans l'eau.":""}</p>`,[["Réessayer cette mer",()=>exitBoard(()=>startHunt())]]),1300)}
+  later(()=>sheet(`<div class="kick">Naufrage</div><div class="big">${IC.skull}</div><h2>${why?"Soute vide":"Ton navire sombre"}</h2><p>${why||"L'équipage regagne la côte à la nage."}</p><p class="sm">La même mer t'attend : les navires n'ont pas bougé.</p>`,[["Réessayer cette mer",()=>exitBoard(()=>startHunt())]]),1300)}
 /* objets */
-$("spyBtn").onclick=()=>{if(busy()||!P.spy)return;if(!started){say("Sonde d'abord une case.");return}const cand=[];for(let r=0;r<N;r++)for(let c=0;c<N;c++)if(board[r][c]===-1&&state[r][c]==="")cand.push([r,c,count(r,c)]);if(!cand.length)return;
-  P.spy--;save();cand.sort((a,b)=>b[2]-a[2]);const[r,c]=cand[Math.random()*Math.min(4,cand.length)|0];sfx.spy();revealAnim(rippleFrom(r,c,revealWater(r,c)),1000/RSPEED);say("La longue-vue repère une eau sûre.","good");hud()};
+$("spyBtn").onclick=()=>{if(busy()||!P.spy)return;P.spy--;sondes++;save();sfx.spy();say("Longue-vue : une sonde de plus.","good");hud()};
 $("powBtn").onclick=()=>say(P.pow?"La poudre protège ton prochain tir manqué.":"Pas de poudre.");
 $("mSonar").onclick=()=>{setMode("sonar");sfx.click()};$("mFire").onclick=()=>{setMode("fire");sfx.swap()};$("mBordee").onclick=()=>{setMode(mode==="bordee"?"fire":"bordee");sfx.fanfare()};
 $("mapBtn").onclick=()=>{muted=!muted;store.set("abordage-muted",muted?"1":"0");setIcons();sfx.click()};
 /* intros */
 const D=(cls,t="")=>`<span class="dw c ${cls}">${t}</span>`;
-function tutorial(){sheet(`<div class="kick">Ordre du capitaine</div><h2>Trouve la flotte, aborde-la</h2><div class="steps">
-  <div class="step">${D("")}<span>Touche une case pour la <b>sonder</b>. Un chiffre apparaît.</span></div>
-  <div class="step">${D("w n2","2")}<span>Il compte les morceaux de navire dans les <b>8 cases autour</b>.</span></div>
-  <div class="step">${D("h")}<span>Sûr de toi ? Passe en <b>Feu !</b> et tire au canon. Un navire <b>touché riposte</b> tant qu'il flotte : achève-le vite.</span></div></div>
-  <p class="sm">Tu as <b>exactement</b> autant de boulets que de coques à détruire : un seul tir dans l'eau et la flotte est hors de portée. La poudre rattrape un tir manqué. La flotte riposte quand la mèche est consumée ; chaque navire coulé la rallonge. Enchaîne les bons coups pour charger la <b>Bordée</b>.</p>`,[["Larguer les amarres",()=>{P.seen.tuto=1;save();closeSheet()}]])}
-const INTRO={cap:["Capitaine en vue","Le plus grand navire de cette mer est le sien. Coule-le, puis bats-le au duel pour lui prendre son fragment de carte."],kraken:["Le Kraken","Un monstre de 2 × 2 cases veille sur l'île. Il se coule comme un navire."]};
+function tutorial(){sheet(`<div class="kick">Ordre du capitaine</div><h2>Trouve la flotte par déduction</h2><div class="steps">
+  <div class="step"><span class="dw" style="font:400 1.3rem var(--fd);width:34px;text-align:center">3</span><span>Les chiffres <b>sur les bords</b> comptent les morceaux de navire dans chaque ligne et chaque colonne.</span></div>
+  <div class="step">${D("w n2","2")}<span>Un chiffre <b>dans l'eau</b> compte les morceaux dans les <b>8 cases autour</b>. Les navires ne se touchent jamais, même en diagonale.</span></div>
+  <div class="step">${D("h")}<span>Sûr de toi ? <b>Feu !</b> Tu as <b>exactement</b> un boulet par morceau de coque : un tir dans l'eau et c'est le naufrage.</span></div></div>
+  <p class="sm">Quelques <b>sondes</b> te permettent de révéler un chiffre là où tu veux (ou de repérer une coque). Appui long sur une case pour la marquer « eau ». Chaque mer se résout sans jamais deviner.</p>`,[["Larguer les amarres",()=>{P.seen.tuto=1;save();closeSheet()}]])}
+const INTRO={cap:["Capitaine en vue","Le plus grand navire de cette mer est le sien. Coule-le, puis bats-le au duel pour lui prendre son fragment de carte."],kraken:["Le Kraken","Un monstre long de 5 cases veille sur l'île. Il se coule comme un navire."]};
 function intro(k){sfx.flag();sheet(`<div class="kick">Attention</div><h2>${INTRO[k][0]}</h2><p>${INTRO[k][1]}</p>`,[["Compris",()=>{P.seen[k]=1;save();closeSheet()}]])}
 function introBordee(){sfx.fanfare();const g=Array.from({length:25},(_,i)=>{const r=i/5|0,c=i%5;return `<i class="${r===2&&c===2?"t":r===2||c===2?"x":""}"></i>`}).join("");
   sheet(`<div class="kick">Nouveau coup</div><h2>La Bordée</h2><div class="bdg">${g}</div><p>Trois bons coups d'affilée l'ont chargée. Choisis le bouton doré <b>Bordée</b>, puis touche une case : <b>toute sa ligne et toute sa colonne</b> sont canonnées d'un seul boulet. L'eau se dévoile sans rien perdre, chaque coque traversée est touchée.</p><p class="sm">Une erreur ou une riposte vide la charge. Garde-la pour une ligne où tu soupçonnes plusieurs navires.</p>`,[["Compris",()=>{P.seen.bordee=1;save();closeSheet()}]])}
 function story(){sfx.show(3);sheet(`<div class="kick">Chapitre ${P.ch}</div><div class="big" style="color:var(--red)">${IC.frag}</div><h2>La carte déchirée</h2><p>La carte du trésor a été déchirée en trois. Trois capitaines en gardent chacun un morceau : <b>${P.caps.map(c=>c[0]).join(", ")}</b>.</p><p class="sm">Mer après mer, coule leurs navires et prends les fragments. L'Île du Crâne se dévoilera.</p>`,[["Prendre la mer",()=>{P.seen.story=1;if(P.lvl<1)P.lvl=1;save();closeSheet();startHunt()}]])}
 /* boot */
-function setIcons(){$("mapBtn").innerHTML=IC.sound;$("mapBtn").classList.toggle("off",muted);$("mSonar").innerHTML=IC.sonar+"Sonder";$("mFire").innerHTML=IC.fire+'<span id="fireLbl">Feu !</span><span class="furie"><i id="furieBar"></i></span>';$("mBordee").innerHTML='<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M3 12h18M12 3v18"/><circle cx="12" cy="12" r="3.5"/></svg>Bordée'}
+function setIcons(){$("mapBtn").innerHTML=IC.sound;$("mapBtn").classList.toggle("off",muted);$("mSonar").innerHTML=IC.sonar+"Sonder<span class=\"cnt\">0</span>";$("mFire").innerHTML=IC.fire+'<span id="fireLbl">Feu !</span><span class="furie"><i id="furieBar"></i></span>';$("mBordee").innerHTML='<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M3 12h18M12 3v18"/><circle cx="12" cy="12" r="3.5"/></svg>Bordée'}
 document.addEventListener("pointerdown",()=>{A()},{once:true});
 setIcons();if(!P.caps){P.caps=capsFor(P.ch);save()}$("sHunt").hidden=false;
 if(!P.seen.story)setTimeout(story,250);else startHunt();
